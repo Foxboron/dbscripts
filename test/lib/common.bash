@@ -210,7 +210,7 @@ checkPackageDB() {
 	# TODO: We need a better way to figure out when we are dealing with
 	#       debug packages
 	if [[ "${repo}" = *-debug ]]; then
-		local pkgnames=($(. "fixtures/$pkgbase/PKGBUILD"; echo "${pkgname[@]}-debug"))
+		local pkgnames=($(. "fixtures/$pkgbase/PKGBUILD"; echo "${pkgbase}-debug"))
 	else
 		local pkgnames=($(. "fixtures/$pkgbase/PKGBUILD";  echo "${pkgname[@]}"))
 	fi
