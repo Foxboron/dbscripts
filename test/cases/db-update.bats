@@ -284,3 +284,21 @@ load ../lib/common
 	[ "$status" -ne 0 ]
 	checkRemovedPackageDB extra "pkg-simple-a"
 }
+
+@test "add split debug packages" {
+	local arches=('i686' 'x86_64')
+	local pkgs=('pkg-split-debuginfo')
+	local pkg
+	local pkgbase
+	local arch
+
+	for pkgbase in ${pkgs[@]}; do
+		releasePackage extra ${pkgbase}
+	done
+
+	db-update
+
+	for pkgbase in ${pkgs[@]}; do
+		checkPackage extra-debug ${pkgbase} 1-1
+	done
+}
