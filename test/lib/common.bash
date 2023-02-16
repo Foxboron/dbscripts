@@ -86,13 +86,17 @@ __buildPackage() {
 		fi
 	fi
 
+	if [[ -z ${BUILDTOOL} ]]; then
+		BUILDTOOL=devtools
+	fi
+
 	pkgarches=($(. PKGBUILD; echo ${arch[@]}))
 	for tarch in ${pkgarches[@]}; do
 		if [ "${tarch}" == 'any' ]; then
-			PKGDEST=${pkgdest} PKGEXT=${PKGEXT} makepkg -c
+			PKGDEST=${pkgdest} PKGEXT=${PKGEXT} BUILDTOOL=${BUILDTOOL} makepkg -c
 			mapfile -tO "${#pkgfiles[@]}" pkgfiles < <(PKGDEST=${pkgdest} PKGEXT=${PKGEXT} makepkg --packagelist)
 		else
-			PKGDEST=${pkgdest} PKGEXT=${PKGEXT} CARCH=${tarch} makepkg -c
+			PKGDEST=${pkgdest} PKGEXT=${PKGEXT} CARCH=${tarch} BUILDTOOL=${BUILDTOOL} makepkg -c
 			mapfile -tO "${#pkgfiles[@]}" pkgfiles < <(PKGDEST=${pkgdest} PKGEXT=${PKGEXT} CARCH=${tarch} makepkg --packagelist)
 		fi
 	done

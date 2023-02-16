@@ -298,6 +298,13 @@ check_builddir() {
 	[[ -n $_builddir && $_builddir = '/build' ]]
 }
 
+check_buildtool() {
+	local _buildtool
+
+	_buildtool=$(_grep_buildinfo "$1" "buildtool")
+	[[ -n $_buildtool && $_buildtool = 'devtools' ]]
+}
+
 check_author() {
 	local author
 	if ! [[ -f "${AUTHORS}" ]]; then

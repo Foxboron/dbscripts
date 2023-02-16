@@ -313,6 +313,13 @@ load ../lib/common
 	[[ $output == *'was not built in a chroot'* ]]
 }
 
+@test "Wrong BUILDTOOL" {
+	BUILDTOOL=dbscripts releasePackage extra 'pkg-buildtool-single-arch'
+	run db-update
+	(( $status == 1 ))
+	[[ $output == *'was not built with devtools'* ]]
+}
+
 @test "add split debug packages" {
 	local arches=('i686' 'x86_64')
 	local pkgs=('pkg-split-debuginfo')
