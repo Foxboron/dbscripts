@@ -34,15 +34,25 @@ arch_git() {
 	fi
 }
 
+# Convert arbitrary project names to GitLab valid path names.
+#
+# GitLab has several limitations on project and group names and also maintains
+# a list of reserved keywords as documented on their docs.
+# https://docs.gitlab.com/ee/user/reserved_names.html
+#
 # 1. replace single '+' between word boundaries with '-'
 # 2. replace any other '+' with literal 'plus'
 # 3. replace any special chars other than '_', '-' and '.' with '-'
+# 4. replace consecutive '_-' chars with a single '-'
+# 5. replace 'tree' with 'unix-tree' due to GitLab reserved keyword
 gitlab_project_name_to_path() {
 	local name=$1
 	printf "%s" "${name}" \
 		| sed -E 's/([a-zA-Z0-9]+)\+([a-zA-Z]+)/\1-\2/g' \
 		| sed -E 's/\+/plus/g' \
-		| sed -E 's/[^a-zA-Z0-9_\-\.]/-/g'
+		| sed -E 's/[^a-zA-Z0-9_\-\.]/-/g' \
+		| sed -E 's/[_\-]{2,}/-/g' \
+		| sed -E 's/^tree$/unix-tree/g'
 }
 
 # Fetch the package sources into a global cache
