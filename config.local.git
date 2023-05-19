@@ -54,9 +54,9 @@ PKGPOOL='pool/packages'
 DEBUGPKGPOOL='pool/packages-debug'
 SRCPOOL='sources/packages'
 
-CLEANUP_DESTDIR="/srv/repos/svn-packages/package-cleanup"
-SOURCE_CLEANUP_DESTDIR="/srv/repos/svn-packages/source-cleanup"
-TMPDIR="/srv/repos/svn-packages/tmp"
+CLEANUP_DESTDIR="/srv/repos/git-packages/package-cleanup"
+SOURCE_CLEANUP_DESTDIR="/srv/repos/git-packages/source-cleanup"
+TMPDIR="/srv/repos/git-packages/tmp"
 
 KEYRING="/etc/pacman.d/gnupg"
 GIT_PACKAGING_REPOS_URL="https://gitlab.archlinux.org/archlinux/packaging/packages"
