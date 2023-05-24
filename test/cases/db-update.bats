@@ -320,6 +320,27 @@ load ../lib/common
 	[[ $output == *'was not built with devtools'* ]]
 }
 
+@test "Wrong PACKAGER domain" {
+	PACKAGER_OVERRIDE="Bob Tester <tester@wrong>" releasePackage extra 'pkg-packager-domain'
+	run db-update
+	(( $status == 1 ))
+	[[ $output == *'does not have a valid packager'* ]]
+}
+
+@test "Wrong PACKAGER claim" {
+	PACKAGER_OVERRIDE="Bob Tester <wrong@localhost>" releasePackage extra 'pkg-packager-claim'
+	run db-update
+	(( $status == 1 ))
+	[[ $output == *'does not have a valid packager'* ]]
+}
+
+@test "PACKAGER name" {
+	PACKAGER_OVERRIDE="Bot (the real) Tester <tester@localhost>" releasePackage extra 'pkg-packager-name'
+	run db-update
+	db-update
+	checkPackage extra 'pkg-packager-name' 1-1
+}
+
 @test "add split debug packages" {
 	local arches=('i686' 'x86_64')
 	local pkgs=('pkg-split-debuginfo')
@@ -344,7 +365,7 @@ load ../lib/common
 	db-update
 
 	checkPackage extra pkg-any-a 1-1
-	checkStateRepoAutoredBy "Cake Foobar <foobar@localhost>"
+	checkStateRepoAutoredBy "Bob Tester <tester@localhost>"
 }
 
 @test "add package with missing author mapping fails" {

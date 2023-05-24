@@ -246,7 +246,7 @@ load ../lib/common
 
 	checkPackage extra pkg-any-a 1-1
 	checkRemovedPackage testing pkg-any-a
-	checkStateRepoAutoredBy "Cake Foobar <foobar@localhost>"
+	checkStateRepoAutoredBy "Bob Tester <tester@localhost>"
 }
 
 @test "move package with missing author mapping fails" {

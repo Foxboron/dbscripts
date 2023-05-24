@@ -93,10 +93,10 @@ __buildPackage() {
 	pkgarches=($(. PKGBUILD; echo ${arch[@]}))
 	for tarch in ${pkgarches[@]}; do
 		if [ "${tarch}" == 'any' ]; then
-			PKGDEST=${pkgdest} PKGEXT=${PKGEXT} BUILDTOOL=${BUILDTOOL} makepkg -c
+			PKGDEST=${pkgdest} PKGEXT=${PKGEXT} BUILDTOOL=${BUILDTOOL} PACKAGER=${PACKAGER_OVERRIDE:-${PACKAGER}} makepkg -c
 			mapfile -tO "${#pkgfiles[@]}" pkgfiles < <(PKGDEST=${pkgdest} PKGEXT=${PKGEXT} makepkg --packagelist)
 		else
-			PKGDEST=${pkgdest} PKGEXT=${PKGEXT} CARCH=${tarch} BUILDTOOL=${BUILDTOOL} makepkg -c
+			PKGDEST=${pkgdest} PKGEXT=${PKGEXT} CARCH=${tarch} BUILDTOOL=${BUILDTOOL} PACKAGER=${PACKAGER_OVERRIDE:-${PACKAGER}} makepkg -c
 			mapfile -tO "${#pkgfiles[@]}" pkgfiles < <(PKGDEST=${pkgdest} PKGEXT=${PKGEXT} CARCH=${tarch} makepkg --packagelist)
 		fi
 	done
@@ -176,6 +176,7 @@ setup() {
 	GIT_PACKAGES_CACHE="${TMP}/git-pkg-repos"
 	GITUSER=""
 	AUTHORS="${TMP}/authors.conf"
+	PACKAGER_DOMAIN=localhost
 
 	if [[ -f "${TMP}/config.override" ]]; then
 		. "${TMP}/config.override"
@@ -184,10 +185,10 @@ eot
 
 	username=$(/usr/bin/id -un)
 	cat <<eot > "${TMP}/authors.conf"
-	qux <a@b.local> dux
-	Cake Foobar <foobar@localhost> ${username}
-	muh <muh@cow> cow
-	${username} <${username}@yay> doo
+qux <a@b.local> dux
+Bob Tester <tester@localhost> ${username}
+muh <muh@cow> cow
+${username} <${username}@yay> doo
 eot
 
 	. config

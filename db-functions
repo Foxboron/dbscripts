@@ -282,9 +282,21 @@ is_debug_package() {
 
 check_packager() {
 	local _packager
+	local author author_email
 
 	_packager=$(_grep_pkginfo "$1" "packager")
-	[[ -n $_packager && $_packager != 'Unknown Packager' ]]
+	if [[ $_packager == 'Unknown Packager' ]] || \
+	   [[ -n ${PACKAGER_DOMAIN} ]] && [[ $_packager != *\<*@${PACKAGER_DOMAIN}\> ]]; then
+		return 1
+	fi
+	if ! author=$(get_author) || \
+	   ! author_email=$(get_author_email "${author}"); then
+		return 1
+	fi
+	if [[ $_packager != *" <${author_email}>" ]]; then
+		return 1
+	fi
+	return 0
 }
 
 check_buildinfo() {
@@ -337,7 +349,7 @@ get_author_name() {
 
 get_author_email() {
 	local author=$1
-	if ! email=$(echo "${author}"|sed -E 's/(.+) (<.+>) .+/\2/'); then
+	if ! email=$(echo "${author}"|sed -E 's/(.+) <(.+)> .+/\2/'); then
 		die "Failed to get name from author line"
 	fi
 	echo "${email}"
