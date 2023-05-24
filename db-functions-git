@@ -152,7 +152,21 @@ vcs_commit() {
 		die "Failed to extract email from author line"
 	fi
 
-	arch_git -c user.name="${name}" -c user.email="${email}" -C "${GIT_STATE_REPO}" commit -m "${commit_message}"
+	export GIT_AUTHOR_NAME="${name}"
+	export GIT_AUTHOR_EMAIL="${email}"
+	export GIT_COMMITTER_NAME="${GIT_AUTHOR_NAME}"
+	export GIT_COMMITTER_EMAIL=${GIT_AUTHOR_EMAIL}
+
+	unset GIT_AUTHOR_DATE
+	unset GIT_COMMITTER_DATE
+
+	arch_git \
+		-c user.name="${name}" \
+		-c user.email="${email}" \
+		-C "${GIT_STATE_REPO}" \
+		commit \
+		--no-gpg-sign \
+		--message="${commit_message}"
 }
 
 
