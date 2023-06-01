@@ -34,21 +34,23 @@ ACL_EXTRA_ALL=(
 	extra extra-debug
 	"${ACL_EXTRA_LIMITED[@]}"
 )
+ACL_MULTILIB_LIMITED=(
+	multilib-staging multilib-staging-debug
+	multilib-testing multilib-testing-debug
+)
+ACL_MULTILIB_ALL=(
+	multilib multilib-debug
+	"${ACL_MULTILIB_LIMITED[@]}"
+)
 ACL_DESKTOP=(
 	kde-unstable kde-unstable-debug
 	gnome-unstable gnome-unstable-debug
 )
-ACL_MULTILIB=(
-	multilib multilib-debug
-	multilib-staging multilib-staging-debug
-	multilib-testing multilib-testing-debug
-)
 ACL=(
-	[packager]="${ACL_EXTRA_ALL[@]}"
-	[junior-packager]="${ACL_EXTRA_LIMITED[@]}"
-	[dev]="${ACL_CORE_ALL[@]} ${ACL_EXTRA_ALL[@]} ${ACL_DESKTOP[@]}"
-	[junior-dev]="${ACL_CORE_LIMITED[@]} ${ACL_EXTRA_ALL[@]} ${ACL_DESKTOP[@]}"
-	[multilib]="${ACL_MULTILIB[@]}"
+	[packager]="${ACL_EXTRA_ALL[@]} ${ACL_MULTILIB_ALL[@]}"
+	[junior-packager]="${ACL_EXTRA_LIMITED[@]} ${ACL_MULTILIB_LIMITED[@]}"
+	[dev]="${ACL_CORE_ALL[@]} ${ACL_EXTRA_ALL[@]} ${ACL_MULTILIB_ALL[@]} ${ACL_DESKTOP[@]}"
+	[junior-dev]="${ACL_CORE_LIMITED[@]} ${ACL_EXTRA_ALL[@]} ${ACL_MULTILIB_ALL[@]} ${ACL_DESKTOP[@]}"
 )
 
 PKGPOOL='pool/packages'
