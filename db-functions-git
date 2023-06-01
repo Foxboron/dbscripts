@@ -74,6 +74,24 @@ fetch_pkgbuild() {
 	return 0
 }
 
+git_tag_exists() {
+	local pkgbase="$1"
+	local tag="$2"
+	local path="${GIT_PACKAGES_CACHE}/${pkgbase}"
+
+	tag=$(gittag_from_pkgver "${tag}")
+
+	if [[ ! -d "${path}" ]]; then
+		return 1
+	fi
+
+	if ! git -C "${path}" rev-parse --quiet --verify --end-of-options "${tag}^{tag}" -- &>/dev/null; then
+		return 1
+	fi
+
+	return 0
+}
+
 
 # Source the PKGBUILD from the package's git/svn/whatever repo.
 source_pkgbuild() {

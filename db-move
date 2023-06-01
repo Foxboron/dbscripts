@@ -49,7 +49,7 @@ for pkgbase in "${args[@]:2}"; do
 			if ! _pkgver=$(pkgver_from_state_repo "${pkgbase}" "${vcsrepo_from}"); then
 				die "%s has no pkgver entry in %s" "${pkgbase}" "${vcsrepo_from}"
 			fi
-			if ! fetch_pkgbuild "${pkgbase}"; then
+			if ! git_tag_exists "${pkgbase}" "${_pkgver}" && ! fetch_pkgbuil "${pkgbase}"; then
 				die "Couldn't find package %s in git!" "${pkgbase}"
 			fi
 			read -rd'\n' pkgver pkgnames < <(source_pkgbuild "${pkgbase}" "${_pkgver}"; \
