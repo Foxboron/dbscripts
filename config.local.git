@@ -47,8 +47,8 @@ ACL_DESKTOP=(
 	gnome-unstable gnome-unstable-debug
 )
 ACL=(
-	[packager]="${ACL_EXTRA_ALL[@]} ${ACL_MULTILIB_ALL[@]}"
-	[junior-packager]="${ACL_EXTRA_LIMITED[@]} ${ACL_MULTILIB_LIMITED[@]}"
+	[packager]="${ACL_EXTRA_ALL[@]} ${ACL_MULTILIB_ALL[@]} ${ACL_DESKTOP[@]}"
+	[junior-packager]="${ACL_EXTRA_LIMITED[@]} ${ACL_MULTILIB_LIMITED[@]} ${ACL_DESKTOP[@]}"
 	[dev]="${ACL_CORE_ALL[@]} ${ACL_EXTRA_ALL[@]} ${ACL_MULTILIB_ALL[@]} ${ACL_DESKTOP[@]}"
 	[junior-dev]="${ACL_CORE_LIMITED[@]} ${ACL_EXTRA_ALL[@]} ${ACL_MULTILIB_ALL[@]} ${ACL_DESKTOP[@]}"
 )
