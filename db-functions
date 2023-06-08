@@ -111,6 +111,61 @@ trap abort INT QUIT TERM HUP
 trap cleanup EXIT
 
 
+stat_busy() {
+	local mesg=$1; shift
+	# shellcheck disable=2059
+	printf "${GREEN}==>${ALL_OFF}${BOLD} ${mesg}...${ALL_OFF}" "$@" >&2
+}
+
+stat_done() {
+	# shellcheck disable=2059
+	printf "${BOLD}done${ALL_OFF}\n" >&2
+}
+
+##
+#  usage : lock( $fd, $file, $message, [ $message_arguments... ] )
+##
+lock() {
+	# Only reopen the FD if it wasn't handed to us
+	if ! [[ "/dev/fd/$1" -ef "$2" ]]; then
+		mkdir -p -- "$(dirname -- "$2")"
+		eval "exec $1>"'"$2"'
+	fi
+
+	if ! flock -n "$1"; then
+		stat_busy "${@:3}"
+		flock "$1"
+		stat_done
+	fi
+}
+
+##
+#  usage : slock( $fd, $file, $message, [ $message_arguments... ] )
+##
+slock() {
+	# Only reopen the FD if it wasn't handed to us
+	if ! [[ "/dev/fd/$1" -ef "$2" ]]; then
+		mkdir -p -- "$(dirname -- "$2")"
+		eval "exec $1>"'"$2"'
+	fi
+
+	if ! flock -sn "$1"; then
+		stat_busy "${@:3}"
+		flock -s "$1"
+		stat_done
+	fi
+}
+
+##
+#  usage : lock_close( $fd )
+##
+lock_close() {
+	local fd=$1
+	# https://github.com/koalaman/shellcheck/issues/862
+	# shellcheck disable=2034
+	exec {fd}>&-
+}
+
 #repo_lock <repo-name> <arch> [timeout]
 repo_lock() {
 	local repo base=${1}; shift
