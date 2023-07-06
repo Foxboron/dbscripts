@@ -17,6 +17,7 @@ DEBUGREPOS=(
 STABLE_REPOS=(core extra multilib)
 TESTING_REPOS=(core-testing extra-testing multilib-testing)
 STAGING_REPOS=(core-staging extra-staging multilib-staging)
+UNSTABLE_REPOS=(kde-unstable gnome-unstable)
 
 ACL_CORE_LIMITED=(
 	core-staging core-staging-debug

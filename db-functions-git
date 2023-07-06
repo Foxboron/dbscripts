@@ -119,8 +119,10 @@ find_repo_for_package() {
 	local pkgarch=${2}
 	local candidates=("${@:3}")
 
-	local repos=($(arch_git -C "${GIT_STATE_REPO}" ls-files "*/$pkgbase" | awk -F/ '{print $1}' | \
-		grep -xFf <(printf "%s\n" "${candidates[@]/%/-${pkgarch}}" "${candidates[@]/%/-any}")))
+	local repos=($(arch_git -C "${GIT_STATE_REPO}" ls-files "*/$pkgbase" | \
+		awk -F/ '{print $1}' | \
+		grep --line-regexp --fixed-strings --file \
+			<(printf "%s\n" "${candidates[@]/%/-${pkgarch}}" "${candidates[@]/%/-any}")))
 
 	if (( ${#repos[@]} > 1 )); then
 		die "%s is present in multiple repos (%s)" "${pkgbase}" "${repos[*]}"

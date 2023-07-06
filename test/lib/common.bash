@@ -153,13 +153,14 @@ setup() {
 	FTP_BASE="${TMP}/ftp"
 	ARCHIVE_BASE="${TMP}/archive"
 	ARCHIVEUSER=""
-	PKGREPOS=('core' 'extra' 'testing' 'staging' 'noperm')
-	DEBUGREPOS=('core-debug' 'extra-debug' 'testing-debug' 'staging-debug')
-	ACL=([users]="extra core staging testing core-debug extra-debug testing-debug staging-debug")
+	PKGREPOS=('core' 'extra' 'testing' 'staging' 'unstable' 'noperm')
+	DEBUGREPOS=('core-debug' 'extra-debug' 'testing-debug' 'staging-debug' 'unstable-debug')
+	ACL=([users]="extra core staging testing unstable core-debug extra-debug testing-debug staging-debug unstable-debug")
 
 	PKGPOOL='pool/packages'
 	DEBUGPKGPOOL='pool/packages-debug'
 	SRCPOOL='sources/packages'
+	UNSTABLE_REPOS=(unstable)
 	STAGING_REPOS=('staging')
 	TESTING_REPOS=('testing')
 	STABLE_REPOS=('core' 'extra')
