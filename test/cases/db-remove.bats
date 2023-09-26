@@ -15,6 +15,7 @@ load ../lib/common
 	for pkgbase in ${pkgs[@]}; do
 		for arch in ${arches[@]}; do
 			db-remove extra ${arch} ${pkgbase}
+			run ! checkStateRepoContains extra ${arch} ${pkgbase}
 		done
 	done
 
@@ -39,6 +40,7 @@ load ../lib/common
 	for pkgbase in ${pkgs[@]}; do
 		for arch in ${arches[@]}; do
 			db-remove extra ${arch} ${pkgbase}
+			run ! checkStateRepoContains extra ${arch} ${pkgbase}
 		done
 	done
 
@@ -66,6 +68,7 @@ load ../lib/common
 	for pkgbase in ${debug_pkgs[@]}; do
 		for arch in ${arches[@]}; do
 			db-remove extra-debug ${arch} ${pkgbase}-debug
+			checkStateRepoContains extra ${arch} ${pkgbase}
 		done
 	done
 
@@ -92,6 +95,9 @@ load ../lib/common
 
 	for pkgbase in ${pkgs[@]}; do
 		checkRemovedPackage extra ${pkgbase}
+		for arch in ${arches[@]}; do
+			run ! checkStateRepoContains extra ${arch} ${pkgbase}
+		done
 	done
 }
 
@@ -104,6 +110,7 @@ load ../lib/common
 
 	for arch in ${arches[@]}; do
 		db-remove extra "${arch}" pkg-split-a1
+		checkStateRepoContains extra ${arch} pkg-split-a
 
 		for db in db files; do
 			if bsdtar -xf "$FTP_BASE/extra/os/${arch}/extra.${db}" -O | grep pkg-split-a1; then
@@ -130,6 +137,7 @@ load ../lib/common
 
 	for pkgbase in ${pkgs[@]}; do
 		checkRemovedPackage extra ${pkgbase}
+		run ! checkStateRepoContains extra any ${pkgbase}
 	done
 }
 
@@ -167,4 +175,20 @@ load ../lib/common
 	[ "$status" -ne 0 ]
 
 	checkPackage testing pkg-any-a 1-1
+}
+
+@test "remove native packages via any arch" {
+	local pkgbase=pkg-simple-a
+	local arches=('i686' 'x86_64')
+	local arch
+
+	releasePackage extra ${pkgbase}
+
+	db-update
+	db-remove extra any ${pkgbase}
+
+	checkRemovedPackage extra ${pkgbase}
+	for arch in ${arches[@]}; do
+		run ! checkStateRepoContains extra ${arch} ${pkgbase}
+	done
 }

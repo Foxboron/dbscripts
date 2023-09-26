@@ -699,5 +699,15 @@ check_pkgbuild_checksum(){
 	fi
 }
 
+function array_append() {
+	local -n array_ref=$1
+	local key=$2
+	local value="${*:3}"
+	if [[ -v "array_ref[$key]" ]]; then
+		array_ref["$key"]+=" "
+	fi
+	array_ref["$key"]+="${value}"
+}
+
 
 . "$(dirname "$(readlink -e "${BASH_SOURCE[0]}")")/db-functions-${VCS}"

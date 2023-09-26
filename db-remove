@@ -12,8 +12,6 @@ repo="$1"
 arch="$2"
 pkgbases=("${@:3}")
 
-vcsrepo="$repo-$arch"
-
 if ! check_repo_permission "$repo"; then
 	die "You don't have permission to remove packages from %s" "$repo"
 fi
@@ -31,42 +29,58 @@ for tarch in "${tarches[@]}"; do
 	repo_lock "$repo" "$tarch" || exit 1
 done
 
-remove_pkgbases=()
-remove_pkgs=()
-remove_debug_pkgs=()
+declare -A remove_pkgbases
+declare -A remove_pkgs
+declare -A remove_debug_pkgs
+
 for pkgbase in "${pkgbases[@]}"; do
 	msg "Removing %s from [%s]..." "$pkgbase" "$repo"
 
-	if fetch_pkgbuild "${pkgbase}" && \
-			_pkgver=$(pkgver_from_state_repo "${pkgbase}" "${vcsrepo}") && \
-			remove_pkgs+=($(source_pkgbuild "${pkgbase}" "${_pkgver}" && printf "%s\n" "${pkgname[@]}")); then
-		remove_pkgbases+=("${pkgbase}")
-	else
-		warning "pkgbase %s not found in %s" "$pkgbase" "$vcsrepo"
-		warning "Removing only pkgname %s from the repo" "$pkgbase"
-		warning "If it was a split package you have to pass its pkgbase to remove it completely!"
-		remove_pkgs+=("$pkgbase")
-	fi
-	if is_globfile "${FTP_BASE}/${repo}-debug/os/${tarch}/${pkgbase}-debug"*; then
-		msg "Found debug package. Removing %s from [%s]..." "${pkgbase}-debug" "${repo}-debug"
-		remove_debug_pkgs+=("${pkgbase}-debug")
-	fi
+	for tarch in "${tarches[@]}" any; do
+		vcsrepo="$repo-$tarch"
+
+		# check to remove whole pkgbase or parts of a split package
+		if fetch_pkgbuild "${pkgbase}" && \
+				_pkgver=$(pkgver_from_state_repo "${pkgbase}" "${vcsrepo}") && \
+				mapfile -t pkgnames < <(source_pkgbuild "${pkgbase}" "${_pkgver}" && printf "%s\n" "${pkgname[@]}"); then
+			array_append remove_pkgbases "${vcsrepo}" "${pkgbase}"
+			array_append remove_pkgs "${tarch}" "${pkgnames[*]}"
+		elif is_globfile "${FTP_BASE}/${repo}/os/${tarch}/${pkgbase}"-*-*-*.pkg.tar*; then
+			warning "pkgbase %s not found in %s - removing only pkgname" "$pkgbase" "$vcsrepo"
+			warning "If %s was a split package you have to pass its pkgbase to remove it completely!" "$pkgbase"
+			array_append remove_pkgs "${tarch}" "${pkgbase}"
+		fi
+
+		# check to remove debug packages
+		if is_globfile "${FTP_BASE}/${repo}-debug/os/${tarch}/${pkgbase}-debug"-*-*-*.pkg.tar*; then
+			msg "Found debug package. Removing %s from [%s]..." "${pkgbase}-debug" "${repo}-debug"
+			array_append remove_debug_pkgs "${tarch}" "${pkgbase}-debug"
+		fi
+	done
 done
 
-for tarch in "${tarches[@]}"; do
-	if (( ${#remove_pkgs[@]} >= 1 )); then
-		arch_repo_modify remove "${repo}" "${tarch}" "${remove_pkgs[@]}"
-	fi
-	if (( ${#remove_debug_pkgs[@]} >= 1 )); then
-		arch_repo_modify remove "${repo}-debug" "${tarch}" "${remove_debug_pkgs[@]}"
-	fi
+# remove binary repo packages
+for key in "${!remove_pkgs[@]}"; do
+	tarch=${key}
+	read -ra pkgs <<< "${remove_pkgs[$key]}"
+	arch_repo_modify remove "${repo}" "${tarch}" "${pkgs[@]}"
 done
 
-if ((REPO_MODIFIED)); then
-	for pkgbase in "${remove_pkgbases[@]}"; do
+# remove binary repo debug packages
+for key in "${!remove_debug_pkgs[@]}"; do
+	tarch=${key}
+	read -ra pkgs <<< "${remove_debug_pkgs[$key]}"
+	arch_repo_modify remove "${repo}-debug" "${tarch}" "${pkgs[@]}"
+done
+
+# remove state repo entry
+for key in "${!remove_pkgbases[@]}"; do
+	vcsrepo=${key}
+	read -ra pkgs <<< "${remove_pkgbases[$key]}"
+	for pkgbase in "${pkgs[@]}"; do
 		vcs_remove_package "${pkgbase}" "${vcsrepo}"
 	done
-fi
+done
 
 # Remove all the locks we created
 for tarch in "${tarches[@]}"; do

@@ -1,6 +1,7 @@
 . /usr/share/makepkg/util.sh
 shopt -s extglob
 
+bats_require_minimum_version 1.5.0
 
 # Copy of db-functions-git
 arch_git() {
@@ -456,6 +457,18 @@ checkStateRepoAutoredBy() {
 	fi
 	if [[ "${expected}" != "${author}" ]]; then
 		error "Author doesn't match, expected: '%s', actual: '%s'" "${expected}" "${author}"
+		return 1
+	fi
+	return 0
+}
+
+checkStateRepoContains() {
+	local repo=$1
+	local arch=$2
+	local pkgbase=$3
+	local state_file="${repo}-${arch}/${pkgbase}"
+
+	if [[ ! -f "${GIT_STATE_REPO}/${state_file}" ]]; then
 		return 1
 	fi
 	return 0
