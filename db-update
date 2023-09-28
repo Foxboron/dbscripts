@@ -8,124 +8,164 @@ if (( $# >= 1 )); then
 	exit 1
 fi
 
-# Find repos with packages to release
-mapfile -t -d '' staging_repos < <(
-	for f in "${STAGING}"/**/*${PKGEXTS}; do
-		printf '%s\0' "${f%/*}"
-	done | sort -uz
-)
+# Check if caller has valid author mapping
+if ! check_author; then
+	die "You don't have a matching author mapping"
+fi
 
-repos=()
-for staging_repo in "${staging_repos[@]##*/}"; do
-	if in_array "${staging_repo}" "${PKGREPOS[@]}"; then
-		repos+=("${staging_repo}")
+# collect currently staged packages
+mapfile -t staging_pkgfiles < <(getpkgfiles "${STAGING}"/**/*${PKGEXTS})
+wait $!
+
+# collect staged packages
+declare -A staging
+declare -A staging_by_arch
+for pkgfile in "${staging_pkgfiles[@]}"; do
+	filename=${pkgfile##*/}
+	repo=${pkgfile%/*}
+	repo=${repo##*/}
+
+	if [[ -h ${pkgfile} ]]; then
+		die "Package %s is a symbolic link" "${repo}/${filename}"
 	fi
+	if ! in_array "${repo}" "${PKGREPOS[@]}"; then
+		die "Package %s has unknown target repository" "${repo}/${filename}"
+	fi
+	if ! check_repo_permission "${repo}"; then
+		die "You don't have permission to update packages in %s" "${repo}"
+	fi
+	if ! check_pkgfile "${pkgfile}"; then
+		die "Package %s is not consistent with its meta data" "${repo}/${filename}"
+	fi
+	if ! check_buildinfo "${pkgfile}"; then
+		die "Package %s does not have a .BUILDINFO file" "${repo}/${filename}"
+	fi
+	if ! check_builddir "${pkgfile}"; then
+		die "Package %s was not built in a chroot" "${repo}/${filename}"
+	fi
+	if ! check_buildtool "${pkgfile}"; then
+		die "Package %s was not built with devtools" "${repo}/${filename}"
+	fi
+	if ! check_packager "${pkgfile}"; then
+		die "Package %s does not have a valid packager" "${repo}/${filename}"
+	fi
+	if ! pacman-key --verify "${pkgfile}.sig" "${pkgfile}" >/dev/null 2>&1; then
+		die "Package %s does not have a valid signature" "${repo}/${filename}"
+	fi
+	if ! pkgarch="$(getpkgarch "${pkgfile}")"; then
+		die "Failed to get arch for package %s" "${repo}/${filename}"
+	fi
+
+	array_append staging "${repo}" "${pkgfile}"
+	array_append staging_by_arch "${repo}::${pkgarch}" "${pkgfile}"
 done
 
+# Fetch all pkgbase repositories once
+pkgbases=()
+for repo in "${!staging[@]}"; do
+	for pkgfile in ${staging[$repo]}; do
+		pkgbase=$(getpkgbase "${pkgfile}")
+		if in_array "${pkgbase}" "${pkgbases[@]}"; then
+			continue
+		fi
+		pkgbases+=("${pkgbase}")
+		if ! fetch_pkgbuild "${pkgbase}"; then
+			die "Couldn't find package %s in git!" "${pkgbase}"
+		fi
+	done
+done
+
+# check if version control of staged packages are valid and consistent
+for repo in "${!staging[@]}"; do
+	read -ra pkgs <<< "${staging[$repo]}"
+
+	if ! check_splitpkgs "${repo}" "${pkgs[@]}"; then
+		die "Missing split packages for %s" "$repo"
+	fi
+
+	for pkg in "${pkgs[@]}"; do
+		if ! check_signed_tag "${pkg}"; then
+			die "Package %s does not have a signed tag matching the version" "$repo/${pkg##*/}"
+		fi
+		if ! check_pkgbuild_checksum "${pkg}"; then
+			die "Package %s was not built with the checked in PKGBUILD" "$repo/${pkg##*/}"
+		fi
+		if ! check_pkgvcs "${pkg}" "${repo}"; then
+			die "Package %s is not consistent with %s repository" "$repo/${pkg##*/}" "${VCS}"
+		fi
+	done
+done
+
+
 # TODO: this might lock too much (architectures)
-for repo in "${repos[@]}"; do
+for repo in "${!staging[@]}"; do
 	for pkgarch in "${ARCHES[@]}"; do
 		repo_lock "${repo}" "${pkgarch}" || exit 1
 	done
 done
 
 
-for repo in "${repos[@]}"; do
-	if pkgs=($(getpkgfiles "${STAGING}/${repo}/"*${PKGEXTS})); then
-		for pkg in "${pkgs[@]}"; do
-			if ! fetch_pkgbuild "$(getpkgbase "${pkg}")"; then
-				die "Couldn't find package %s in git!" "${pkg}"
-			fi
-		done
-	fi
-done
-
-
-if ! check_author; then
-	die "You don't have a matching author mapping"
-fi
-
-# check if packages are valid
-for repo in "${repos[@]}"; do
-	if ! check_repo_permission "${repo}"; then
-		die "You don't have permission to update packages in %s" "$repo"
-	fi
-	if pkgs=($(getpkgfiles "${STAGING}/${repo}/"*${PKGEXTS})); then
-		for pkg in "${pkgs[@]}"; do
-			if [[ -h ${pkg} ]]; then
-				die "Package %s is a symbolic link" "$repo/${pkg##*/}"
-			fi
-			if ! check_signed_tag "${pkg}"; then
-				die "Package %s does not have a signed tag matching the version" "$repo/${pkg##*/}"
-			fi
-			if ! check_pkgbuild_checksum "${pkg}"; then
-				die "Package %s was not built with the checked in PKGBUILD" "$repo/${pkg##*/}"
-			fi
-			if ! check_pkgfile "${pkg}"; then
-				die "Package %s is not consistent with its meta data" "$repo/${pkg##*/}"
-			fi
-			if ! pacman-key --verify "${pkg}.sig" "${pkg}" >/dev/null 2>&1; then
-				die "Package %s does not have a valid signature" "$repo/${pkg##*/}"
-			fi
-			if ! check_pkgvcs "${pkg}" "${repo}"; then
-				die "Package %s is not consistent with %s repository" "$repo/${pkg##*/}" "${VCS}"
-			fi
-			if ! check_pkgrepos "${pkg}"; then
-				die "Package %s already exists in another repository" "$repo/${pkg##*/}"
-			fi
-			if ! missing_repo="$(check_stagingrepos "${pkg}" "${repo}")"; then
-				die "Package %s in %s needs to be updated in unstable repos as well: %s" "${pkg}" "${repo}" "${missing_repo}"
-			fi
-			if ! check_packager "${pkg}"; then
-				die "Package %s does not have a valid packager" "$repo/${pkg##*/}"
-			fi
-			if ! check_buildinfo "${pkg}"; then
-				die "Package %s does not have a .BUILDINFO file" "$repo/${pkg##*/}"
-			fi
-			if ! check_builddir "${pkg}"; then
-				die "Package %s was not built in a chroot" "$repo/${pkg##*/}"
-			fi
-			if ! check_buildtool "${pkg}"; then
-				die "Package %s was not built with devtools" "$repo/${pkg##*/}"
-			fi
-			if ! check_reproducible "${pkg}"; then
-				error "Package %s is not reproducible." "${pkg}"
-				die "Ensure that all dependencies are available in the repositories or are added in the same db-update."
-			fi
-		done
-		if ! check_splitpkgs "${repo}" "${pkgs[@]}"; then
-			die "Missing split packages for %s" "$repo"
+# check package and repository state after locking
+for repo in "${!staging[@]}"; do
+	read -ra pkgs <<< "${staging[$repo]}"
+	for pkg in "${pkgs[@]}"; do
+		if ! check_pkgrepos "${pkg}"; then
+			die "Package %s already exists in another repository" "$repo/${pkg##*/}"
 		fi
-		# TODO:
-		# Add history repo information check as detailed in proposal
-	else
-		die "Could not read %s" "$STAGING"
-	fi
+		if ! missing_repo="$(check_stagingrepos "${pkg}" "${repo}")"; then
+			die "Package %s in %s needs to be updated in unstable repos as well: %s" "${pkg}" "${repo}" "${missing_repo}"
+		fi
+		if ! check_reproducible "${pkg}"; then
+			error "Package %s is not reproducible." "${pkg}"
+			die "Ensure that all dependencies are available in the repositories or are added in the same db-update."
+		fi
+	done
+	# TODO:
+	# Add history repo information check as detailed in proposal
 done
 
-for repo in "${repos[@]}"; do
+
+for repo in "${!staging[@]}"; do
 	msg "Updating [%s]..." "$repo"
 	declare -A add_vcspkgs
-	any_pkgs=($(getpkgfiles "${STAGING}/${repo}/"*-any${PKGEXTS} 2>/dev/null))
+	declare -A pkgfile_metadata
+	declare -A pkgkeys
+	read -ra any_pkgs <<< "${staging_by_arch[${repo}::any]}"
 	for pkgarch in "${ARCHES[@]}"; do
 		add_pkgs=()
 		debug_pkgs=()
-		arch_pkgs=($(getpkgfiles "${STAGING}/${repo}/"*"-${pkgarch}"${PKGEXTS} 2>/dev/null))
+		read -ra arch_pkgs <<< "${staging_by_arch[${repo}::${pkgarch}]}"
 		for pkg in "${arch_pkgs[@]}" "${any_pkgs[@]}"; do
 			pkgfile="${pkg##*/}"
-			if [[ ! "${add_vcspkgs["${pkgfile}::pkgbase"]+exists}" ]]; then
+
+			# collect metadata the first time we see a pkgfile
+			if [[ ! "${pkgfile_metadata["${pkgfile}::pkgbase"]+exists}" ]]; then
 				if ! pkgbase="$(getpkgbase "${pkg}")" || \
+						! realpkgarch="$(getpkgarch "${pkg}")" || \
 						! pkgver="$(getpkgver "${pkg}")"; then
 					die "Failed to get metadata from '%s'" "${pkg}"
 				fi
-				add_vcspkgs["${pkgfile}::pkgbase"]="${pkgbase}"
-				add_vcspkgs["${pkgfile}::pkgver"]="${pkgver}"
-
-				is_debug_package "${pkg}"
-				add_vcspkgs["${pkgfile}::debug"]=$(( $? == 0 ))
+				pkgfile_metadata["${pkgfile}::pkgbase"]="${pkgbase}"
+				pkgfile_metadata["${pkgfile}::arch"]="${realpkgarch}"
+				pkgfile_metadata["${pkgfile}::pkgver"]="${pkgver}"
+				if is_debug_package "${pkg}"; then
+					pkgfile_metadata["${pkgfile}::debug"]=1
+				else
+					pkgfile_metadata["${pkgfile}::debug"]=0
+				fi
 			fi
 
-			if (( ${add_vcspkgs["${pkgfile}::debug"]} )); then
+			pkgbase=${pkgfile_metadata["${pkgfile}::pkgbase"]}
+			realpkgarch=${pkgfile_metadata["${pkgfile}::arch"]}
+			pkgver=${pkgfile_metadata["${pkgfile}::pkgver"]}
+			pkgkey="${pkgbase}::${realpkgarch}"
+			pkgkeys["${pkgkey}"]="${pkgkey}"
+
+			add_vcspkgs[${pkgkey}::pkgbase]="${pkgbase}"
+			add_vcspkgs[${pkgkey}::pkgver]="${pkgver}"
+			add_vcspkgs[${pkgkey}::arch]="${realpkgarch}"
+
+			if (( ${pkgfile_metadata["${pkgfile}::debug"]} )); then
 				debug_pkgs+=("${pkgfile}")
 				currentpool=${PKGPOOL}-debug
 				currentrepo=${repo}-debug
@@ -136,22 +176,20 @@ for repo in "${repos[@]}"; do
 			fi
 
 			msg2 '%s (%s)' "$pkgfile" "$pkgarch"
+
 			# any packages might have been moved by the previous run
-			if [[ -f ${pkg} ]]; then
-				mv "${pkg}" "$FTP_BASE/${currentpool}"
-			fi
+			[[ -f ${pkg} ]]     && mv "${pkg}" "$FTP_BASE/${currentpool}"
+			[[ -f ${pkg}.sig ]] && mv "${pkg}.sig" "$FTP_BASE/${currentpool}"
+
 			mkdir -p "$FTP_BASE/${currentrepo}/os/${pkgarch}"
 			ln -sf "../../../${currentpool}/${pkgfile}" "$FTP_BASE/${currentrepo}/os/${pkgarch}"
-			# also move signatures
-			if [[ -f ${pkg}.sig ]]; then
-				mv "${pkg}.sig" "$FTP_BASE/${currentpool}"
-			fi
-			if [[ ${PKGPOOL} = "${currentpool}" ]]; then
-				# do not archive debug info, this is not of historic interest
-				"$(dirname "$(readlink -e "${BASH_SOURCE[0]}")")/db-archive" "${FTP_BASE}/${PKGPOOL}/${pkg##*/}"
-			fi
 			if [[ -f $FTP_BASE/${currentpool}/${pkgfile}.sig ]]; then
 				ln -sf "../../../${currentpool}/${pkgfile}.sig" "$FTP_BASE/${currentrepo}/os/${pkgarch}"
+			fi
+
+			# do not archive debug info, this is not of historic interest
+			if [[ ${currentpool} != *-debug ]]; then
+				"$(dirname "$(readlink -e "${BASH_SOURCE[0]}")")/db-archive" "${FTP_BASE}/${currentpool}/${pkgfile}"
 			fi
 		done
 		if (( ${#add_pkgs[@]} >= 1 )); then
@@ -160,20 +198,18 @@ for repo in "${repos[@]}"; do
 		if (( ${#debug_pkgs[@]} >= 1 )); then
 			arch_repo_modify add "${repo}-debug" "${pkgarch}" "${debug_pkgs[@]}"
 		fi
-		if ((REPO_MODIFIED)); then
-			for pkg in "${add_pkgs[@]}"; do
-				if [[ $pkg == *-any${PKGEXTS} ]]; then
-					pkgarch=any
-				fi
-				pkgbase="${add_vcspkgs[$pkg::pkgbase]}"
-				pkgver="${add_vcspkgs[$pkg::pkgver]}"
-				vcs_update_package "${pkgbase}" "${pkgver}" "${repo}-${pkgarch}"
-			done
-		fi
 	done
+	if ((REPO_MODIFIED)); then
+		for pkgkey in "${!pkgkeys[@]}"; do
+			pkgbase="${add_vcspkgs[${pkgkey}::pkgbase]}"
+			pkgver="${add_vcspkgs[${pkgkey}::pkgver]}"
+			pkgarch="${add_vcspkgs[${pkgkey}::arch]}"
+			vcs_update_package "${pkgbase}" "${pkgver}" "${repo}-${pkgarch}"
+		done
+	fi
 done
 
-for repo in "${repos[@]}"; do
+for repo in "${!staging[@]}"; do
 	for pkgarch in "${ARCHES[@]}"; do
 		repo_unlock "${repo}" "${pkgarch}"
 	done

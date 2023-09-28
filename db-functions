@@ -450,7 +450,11 @@ getpkgfiles() {
 		files+=("$(getpkgfile "$f")") || exit 1
 	done
 
-	echo "${files[@]}"
+	if (( ${#files[@]} )); then
+		printf "%s\n" "${files[@]}"
+	fi
+
+	return 0
 }
 
 check_pkgfile() {

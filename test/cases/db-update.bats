@@ -180,8 +180,8 @@ load ../lib/common
 	mkdir "${STAGING}/unknown/"
 	releasePackage extra 'pkg-any-a'
 	releasePackage unknown 'pkg-any-b'
-	db-update
-	checkPackage extra 'pkg-any-a' 1-1
+	run ! db-update
+	run ! checkPackage extra 'pkg-any-a' 1-1
 	[ ! -e "${FTP_BASE}/unknown" ]
 	rm -rf "${STAGING}/unknown/"
 }
