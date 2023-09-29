@@ -334,7 +334,7 @@ load ../lib/common
 	[[ $output == *'does not have a valid packager'* ]]
 }
 
-@test "PACKAGER name" {
+@test "override PACKAGER name label" {
 	PACKAGER_OVERRIDE="Bot (the real) Tester <tester@localhost>" releasePackage extra 'pkg-packager-name'
 	run db-update
 	db-update
