@@ -71,6 +71,7 @@ script_unlock() {
 }
 
 cleanup() {
+	local status=${1:-$?}
 	local l
 	local repo
 	local arch
@@ -94,7 +95,7 @@ cleanup() {
 		date +%s > "${FTP_BASE}/lastupdate"
 	fi
 
-	[[ -n $1 ]] && exit "$1"
+	exit "$status"
 }
 
 abort() {
