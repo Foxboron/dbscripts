@@ -1,8 +1,27 @@
 FROM docker.io/archlinux/archlinux
-RUN pacman -Syu --noconfirm --needed sudo fakeroot awk subversion make kcov bash-bats gettext grep tree binutils git && \
-	pacman-key --init && \
+
+RUN pacman -Syu --noconfirm --needed \
+		sudo \
+		fakeroot \
+		awk \
+		subversion \
+		make \
+		kcov \
+		bash-bats \
+		gettext \
+		grep \
+		tree \
+		binutils \
+		git \
+		parallel \
+		coreutils
+
+RUN pacman-key --init && \
 	echo '%wheel ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/wheel && \
-	useradd -N -g users -G wheel -d /build -m tester && \
+	echo '%packager ALL = (archive) NOPASSWD: /dbscripts/db-archive' > /etc/sudoers.d/dbscripts && \
+	groupadd packager && \
+	useradd -N -g users -G wheel,packager -d /build -m tester && \
+	useradd -M archive && \
 	ln -sf /dbscripts/db-archive /usr/local/bin/ && \
 	ln -sf /dbscripts/db-move /usr/local/bin/ && \
 	ln -sf /dbscripts/db-remove /usr/local/bin/ && \
@@ -13,9 +32,30 @@ RUN pacman -Syu --noconfirm --needed sudo fakeroot awk subversion make kcov bash
 	ln -sf /dbscripts/cron-jobs/devlist-mailer /usr/local/bin/ && \
 	ln -sf /dbscripts/cron-jobs/ftpdir-cleanup /usr/local/bin/ && \
 	ln -sf /dbscripts/cron-jobs/integrity-check /usr/local/bin/ && \
-	ln -sf /dbscripts/cron-jobs/sourceballs /usr/local/bin/
+	ln -sf /dbscripts/cron-jobs/sourceballs /usr/local/bin/ && \
+	mkdir -p /etc/dbscripts/ && \
+	echo "tester <tester@archlinux.org> tester" > /etc/dbscripts/authors.conf && \
+	echo 0 > /srv/ftp/lastupdate && \
+	mkdir -p \
+		/srv/archive \
+		/srv/repos/state \
+		/srv/ftp/pool/packages{,-debug} \
+		/srv/ftp/{{core,extra,multilib}{,-testing,-staging},gnome-unstable}/os/x86_64/ && \
+	chgrp packager \
+		/srv/ftp/lastupdate \
+		/srv/repos/state \
+		/srv/ftp/pool/packages{,-debug} \
+		/srv/ftp/{{core,extra,multilib}{,-testing,-staging},gnome-unstable}/os/x86_64/ && \
+	chown archive:archive /srv/archive && \
+	chmod 775 \
+		/srv/ftp/lastupdate \
+		/srv/repos/state \
+		/srv/ftp/pool/packages{,-debug} \
+		/srv/ftp/{{core,extra,multilib}{,-testing,-staging},gnome-unstable}/os/x86_64/ && \
+	echo -e "[safe]\n\tdirectory = *\n" > /etc/gitconfig
 
 USER tester
+
 RUN echo -e "\
 Key-Type: RSA\n\
 Key-Length: 1024\n\
@@ -27,5 +67,11 @@ Expire-Date: 0\n\
 %commit\n"\
 | gpg --quiet --batch --no-tty --no-permission-warning --gen-key && \
 	gpg --export | sudo pacman-key -a - && \
-	sudo pacman-key --lsign-key tester@localhost
+	sudo pacman-key --lsign-key tester@localhost && \
+	mkdir -p \
+		/build/staging/{{core,extra,multilib}{,-testing,-staging},gnome-unstable} && \
+	git config --global user.email "tester@localhost" && \
+	git config --global user.name "Bob Tester" && \
+	git -C /srv/repos/state init --initial-branch=main --shared=group .
+
 ENV PACKAGER="Bob Tester <tester@localhost>"
