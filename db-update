@@ -118,6 +118,9 @@ for repo in "${!staging[@]}"; do
 		if ! missing_repo="$(check_stagingrepos "${pkg}" "${repo}")"; then
 			die "Package %s in %s needs to be updated in unstable repos as well: %s" "${pkg}" "${repo}" "${missing_repo}"
 		fi
+		if ! check_package_is_newer_than_repo "${pkg}" "${repo}"; then
+			die "Packages %s has a version which is not newer than currently released in %s" "${pkg}" "${repo}"
+		fi
 		if ! check_reproducible "${pkg}"; then
 			error "Package %s is not reproducible." "${pkg}"
 			die "Ensure that all dependencies are available in the repositories or are added in the same db-update."

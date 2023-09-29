@@ -708,6 +708,35 @@ check_pkgbuild_checksum(){
 	fi
 }
 
+check_package_is_newer_than_repo() {
+	local pkgfile=$1
+	local repo=$2
+	local pkgbase pkgarch pkgver
+	local pkgver_repo vercmp_result
+
+	if ! pkgbase=$(getpkgbase "${pkgfile}") || \
+			! pkgarch=$(getpkgarch "${pkgfile}") || \
+			!  pkgver=$(getpkgver "${pkgfile}"); then
+		error "Package %s has invalid metadata" "${pkgfile}"
+		return 1
+	fi
+
+	# it is okay if package does not exist in the current repo
+	if ! pkgver_repo=$(pkgver_from_state_repo "${pkgbase}" "${repo}-${pkgarch}"); then
+		return 0
+	fi
+
+	if ! vercmp_result=$(vercmp "${pkgver}" "${pkgver_repo}"); then
+		error "Package %s failed to compare version %s against repo version %s" "${pkgfile}" "${pkgver}" "${pkgver_repo}"
+		return 1
+	fi
+
+	if ! (( vercmp_result >= 1 )); then
+		return 1
+	fi
+	return 0
+}
+
 function array_append() {
 	local -n array_ref=$1
 	local key=$2

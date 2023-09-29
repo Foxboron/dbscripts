@@ -377,3 +377,23 @@ load ../lib/common
 
 	checkRemovedPackage extra pkg-any-a
 }
+
+@test "downgrade package fails" {
+	releasePackage extra pkg-any-a
+	for p in "${STAGING}"/extra/*${PKGEXT} "${STAGING}"/extra/*.sig; do
+		mv "${p}" "${TMP}/"
+	done
+
+	updatePackage pkg-any-a
+	releasePackage extra pkg-any-a
+	db-update
+
+	checkPackage extra pkg-any-a 1-2
+
+	for p in "${TMP}"/*${PKGEXT} "${TMP}"/*.sig; do
+		mv "${p}" "${STAGING}/extra/"
+	done
+
+	run ! db-update
+	checkPackage extra pkg-any-a 1-2
+}
