@@ -219,6 +219,17 @@ load ../lib/common
 	checkRemovedPackageDB extra pkg-any-a
 }
 
+@test "add broken package fails" {
+	local p
+	releasePackage extra 'pkg-any-a'
+	for p in "${STAGING}"/extra/*${PKGEXT}; do
+		echo >> "${p}"
+	done
+	run ! db-update
+
+	checkRemovedPackageDB extra pkg-any-a
+}
+
 @test "add package with inconsistent version fails" {
 	local p
 	releasePackage extra 'pkg-any-a'
