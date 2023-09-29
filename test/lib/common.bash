@@ -145,7 +145,7 @@ setup() {
 	local username
 	PKGEXT=".pkg.tar.xz"
 
-	TMP="$(mktemp -d)"
+	TMP="$(mktemp --directory --tmpdir 'tmp.dbscripts-tests-XXXXXXXXXXXX')"
 	chmod 770 "$TMP"
 
 	export DBSCRIPTS_CONFIG=${TMP}/config.local
