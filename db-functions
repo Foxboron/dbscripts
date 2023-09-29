@@ -685,9 +685,13 @@ check_reproducible() {
 check_signed_tag(){
 	local pkgbase="$(getpkgbase ${1})"
 	local pkgver="$(gittag_from_pkgver "$(getpkgver "${1}")")"
+	if ! git_tag_exists "${pkgbase}" "${pkgver}"; then
+		return 1
+	fi
 	if ! git -C "${GIT_PACKAGES_CACHE}/${pkgbase}" verify-tag "${pkgver}" >/dev/null 2>&1; then
 		return 1
 	fi
+	return 0
 }
 
 # Verified the package .BUIDINFO PKGBUID sha256sum against the checked out version
