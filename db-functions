@@ -549,29 +549,51 @@ check_pkgrepos() {
 }
 
 check_stagingrepos() {
-	local pkgfile=${1}
-	local pkgrepo=${2}
-	local pkgbase=$(getpkgbase "${pkgfile}")
-	local pkgname=$(getpkgname "${pkgfile}")
-	local pkgarch=$(getpkgarch "${pkgfile}")
-	local candidate candidates=()
+	local -n staging_ref=$1
+	local pkgfile=${2}
+	local pkgrepo=${3}
 
+	local repo package_repos required_repo required_repos=()
+	local staged_packages staged_pkgfile staged_pkgname
+	local pkgbase pkgname pkgarch
+
+	pkgbase=$(getpkgbase "${pkgfile}")
+	pkgname=$(getpkgname "${pkgfile}")
+	pkgarch=$(getpkgarch "${pkgfile}")
+
+	# check if testing is required for stable
 	if in_array "${pkgrepo}" "${STABLE_REPOS[@]}"; then
-		candidates+=($(find_repo_for_package "${pkgbase}" "${pkgarch}" "${TESTING_REPOS[@]}"))
+		mapfile -t package_repos < <(find_repo_for_package "${pkgbase}" "${pkgarch}" "${TESTING_REPOS[@]}")
+		required_repos+=("${package_repos[@]}")
 	fi
+	# check if staging is required for stable,testing
 	if in_array "${pkgrepo}" "${STABLE_REPOS[@]}" "${TESTING_REPOS[@]}"; then
-		candidates+=($(find_repo_for_package "${pkgbase}" "${pkgarch}" "${STAGING_REPOS[@]}"))
+		mapfile -t package_repos < <(find_repo_for_package "${pkgbase}" "${pkgarch}" "${STAGING_REPOS[@]}")
+		required_repos+=("${package_repos[@]}")
 	fi
-	(( ${#candidates[@]} == 0 )) && return 0
 
-	printf '%s\n' "${candidates[@]%-*}"
-	for candidate in "${candidates[@]}"; do
-		for candidate in "${STAGING}/${candidate%-*}"/*${PKGEXTS}; do
-			[[ ${pkgname} = $(getpkgname "${candidate}" 2>/dev/null) ]] && return 0
+	# check for each required repo
+	for required_repo in "${required_repos[@]}"; do
+		repo=${required_repo%-*}
+		read -ra staged_packages <<< "${staging_ref[${repo}]}"
+
+		# check if package is staged in required repo
+		for staged_pkgfile in "${staged_packages[@]}"; do
+			staged_pkgname=${staged_pkgfile##*/}
+			staged_pkgname=${staged_pkgname%-*-*-*}
+			# staged package found for repo
+			if [[ ${pkgname} = "${staged_pkgname}" ]]; then
+				continue 2
+			fi
 		done
+
+		# missing staged package in repo
+		printf '%s' "${repo}"
+		return 1
 	done
 
-	return 1
+	# no staged packages required
+	return 0
 }
 
 #usage: check_license ${license[@]}"
