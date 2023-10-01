@@ -107,6 +107,9 @@ for repo in "${!staging[@]}"; do
 	done
 done
 
+if ! check_reproducible staging; then
+	die "Ensure that all dependencies are available in the repositories or are added in the same db-update."
+fi
 
 # check package and repository state after locking
 for repo in "${!staging[@]}"; do
@@ -120,10 +123,6 @@ for repo in "${!staging[@]}"; do
 		fi
 		if ! check_package_is_newer_than_repo "${pkg}" "${repo}"; then
 			die "Packages %s has a version which is not newer than currently released in %s" "${pkg}" "${repo}"
-		fi
-		if ! check_reproducible "${pkg}"; then
-			error "Package %s is not reproducible." "${pkg}"
-			die "Ensure that all dependencies are available in the repositories or are added in the same db-update."
 		fi
 	done
 	# TODO:

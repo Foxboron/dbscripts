@@ -661,24 +661,51 @@ arch_repo_modify() {
 	REPO_MODIFIED=1
 }
 
-# Verify the existence of dependent packages needed by a given pkgfile
-# usage: check_reproducible pkgfile
+# Verify the existence of dependent packages needed by all staged pkgfiles
+# usage: check_reproducible staged_packages
 check_reproducible() {
-	local pkg dir pkgs=() pkgfile pkgfiles=()
+	local -n staging_ref=$1
+	local repo pkgfile pkgname pkgfiles=()
+	local dependency dependencies staged_packages
 
-	mapfile -t pkgs < <(_grep_all_info "${1}" .BUILDINFO installed)
+	declare -A dependencies
+	declare -A staged_packages
 
-	for pkg in "${pkgs[@]}"; do
-		local pkgname=${pkg%-*-*-*}
-		for dir in "${FTP_BASE}"/pool/* "${ARCHIVE_BASE}/packages/${pkgname:0:1}/${pkgname}" "${STAGING}"/**/; do
-			if pkgfile="$(getpkgfile "${dir}/${pkg}"${PKGEXTS} 2>/dev/null)"; then
-				pkgfiles+=("${pkgfile}")
-				continue 2
-			fi
+	# collect all dependencies once in a lookup table
+	for repo in "${!staging_ref[@]}"; do
+		read -ra pkgfiles <<< "${staging_ref[$repo]}"
+		for pkgfile in "${pkgfiles[@]}"; do
+			mapfile -t pkg_dependencies < <(_grep_all_info "${pkgfile}" .BUILDINFO installed)
+			for dependency in "${pkg_dependencies[@]}"; do
+				array_append dependencies "${dependency}" "${pkgfile}"
+			done
+			dependency=${pkgfile##*/}
+			# shellcheck disable=2295
+			dependency=${dependency%*${PKGEXTS}}
+			staged_packages["${dependency}"]="${pkgfile}"
 		done
-		error "could not find existing or staged package for dependency %s" "${pkg}"
+	done
+
+	for dependency in "${!dependencies[@]}"; do
+		pkgname=${dependency%-*-*-*}
+		[ "${staged_packages["${dependency}"]+exists}" ] && continue
+
+		# fast lookup with none glob file exists check using default PKGEXT
+		[[ -f "${FTP_BASE}"/pool/packages/${dependency}${PKGEXT_DEFAULT} ]] && continue
+		[[ -f "${ARCHIVE_BASE}/packages/${pkgname:0:1}/${pkgname}/${dependency}${PKGEXT_DEFAULT}" ]] && continue
+
+		# fallback lookup in csae fast lookup with default pkgext fails
+		# shellcheck disable=2086
+		getpkgfile "${FTP_BASE}/pool/packages/${dependency}"${PKGEXTS} &>/dev/null && continue
+		# shellcheck disable=2086
+		getpkgfile "${ARCHIVE_BASE}/packages/${pkgname:0:1}/${pkgname}/${dependency}"${PKGEXTS} &>/dev/null && continue
+
+		error "could not find existing or staged package for dependency %s" "${dependency}"
+		error "Package %s is not reproducible." "${dependencies[${dependency}]##*/}"
 		return 1
 	done
+
+	return 0
 }
 
 # TODO: Needs to verify the keyid is in the keyring
