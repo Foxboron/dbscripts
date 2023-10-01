@@ -88,8 +88,7 @@ load ../lib/common
 	releasePackage staging pkg-any-a
 	db-update
 
-	run db-move staging extra pkg-any-a
-	[ "$status" -ne 0 ]
+	run ! db-move staging extra pkg-any-a
 }
 
 @test "move single-arch packages" {
@@ -167,12 +166,10 @@ load ../lib/common
 	releasePackage extra pkg-any-a
 	db-update
 
-	run db-move extra community pkg-any-a
-	[ "$status" -ne 0 ]
+	run ! db-move extra community pkg-any-a
 	[[ $output == *'community is not a valid'* ]]
 
-	run db-move notconfigured community pkg-any-a
-	[ "$status" -ne 0 ]
+	run ! db-move notconfigured community pkg-any-a
 	[[ $output == *'notconfigured is not a valid'* ]]
 }
 
@@ -206,8 +203,7 @@ load ../lib/common
 
 	db-update
 
-	run db-move testing noperm pkg-simple-a pkg-simple-b
-	[ "$status" -ne 0 ]
+	run ! db-move testing noperm pkg-simple-a pkg-simple-b
 
 	for pkgbase in ${pkgs[@]}; do
 		checkRemovedPackage noperm ${pkgbase}
@@ -229,8 +225,7 @@ load ../lib/common
 	db-update
 	disablePermissionOverride
 
-	run db-move noperm testing pkg-simple-a pkg-simple-b
-	[ "$status" -ne 0 ]
+	run ! db-move noperm testing pkg-simple-a pkg-simple-b
 
 	for pkgbase in ${pkgs[@]}; do
 		checkRemovedPackage testing ${pkgbase}
@@ -254,8 +249,7 @@ load ../lib/common
 	db-update
 
 	emptyAuthorsFile
-	run db-move testing extra pkg-any-a
-	[ "$status" -ne 0 ]
+	run ! db-move testing extra pkg-any-a
 
 	checkPackage testing pkg-any-a 1-1
 	checkRemovedPackage extra pkg-any-a

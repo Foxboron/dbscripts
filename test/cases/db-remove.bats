@@ -150,8 +150,7 @@ load ../lib/common
 	db-update
 	disablePermissionOverride
 
-	run db-remove noperm any ${pkgbase}
-	[ "$status" -ne 0 ]
+	run ! db-remove noperm any ${pkgbase}
 
 	checkPackage noperm ${pkgbase} 1-1
 }
@@ -171,8 +170,7 @@ load ../lib/common
 	db-update
 
 	emptyAuthorsFile
-	run db-remove testing any pkg-any-a
-	[ "$status" -ne 0 ]
+	run ! db-remove testing any pkg-any-a
 
 	checkPackage testing pkg-any-a 1-1
 }
