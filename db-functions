@@ -757,6 +757,73 @@ check_pkgbuild_checksum(){
 	fi
 }
 
+get_stability_layer_from_repo() {
+	local repo=$1
+	if in_array "${repo}" "${STABLE_REPOS[@]}"; then
+		echo stable
+		return 0
+	elif in_array "${repo}" "${TESTING_REPOS[@]}"; then
+		echo testing
+		return 0
+	elif in_array "${repo}" "${STAGING_REPOS[@]}"; then
+		echo staging
+		return 0
+	elif in_array "${repo}" "${UNSTABLE_REPOS[@]}"; then
+		echo unstable
+		return 0
+	fi
+	return 1
+}
+
+get_repos_from_stability_layer() {
+	local layer=$1
+	case $layer in
+		stable)
+			printf "%s\n" "${STABLE_REPOS[@]}"
+			return 0
+			;;
+		testing)
+			printf "%s\n" "${TESTING_REPOS[@]}"
+			return 0
+			;;
+		staging)
+			printf "%s\n" "${STAGING_REPOS[@]}"
+			return 0
+			;;
+		unstable)
+			printf "%s\n" "${UNSTABLE_REPOS[@]}"
+			return 0
+			;;
+	esac
+	return 1
+}
+
+get_stability_layer_between() {
+	local layer_from=$1
+	local layer_to=$2
+	local reverse=${3:-0}
+
+	local pass=cat
+	local found=0
+
+	if (( reverse )); then
+		pass=tac
+	fi
+
+	for layer in $(printf '%s\n' "${STABILITY_LAYERS[@]}" | ${pass}); do
+		if (( ! found )); then
+			[[ $layer == "${layer_from}" ]] && found=1
+			continue
+		fi
+
+		if [[ $layer == "${layer_to}" ]]; then
+			return
+		fi
+
+		echo "${layer}"
+	done
+}
+
 check_package_is_newer_than_repo() {
 	local pkgfile=$1
 	local repo=$2

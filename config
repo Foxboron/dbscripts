@@ -12,6 +12,7 @@ UNSTABLE_REPOS=()
 STAGING_REPOS=()
 TESTING_REPOS=()
 STABLE_REPOS=()
+STABILITY_LAYERS=(stable testing staging unstable)
 declare -A ACL=()
 
 # VCS backend
