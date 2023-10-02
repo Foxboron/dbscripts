@@ -868,6 +868,92 @@ check_package_is_newer_than_repo() {
 	return 0
 }
 
+check_staged_versions() {
+	local -n staging_ref=$1
+	local pkgname pkgver pkgarch
+	local layer_lookup layer repo pkgfile pkgs
+	local layer_above pkgver_above vercmp_result
+
+	# build fast lookup table
+	declare -A layer_lookup
+	for repo in "${!staging_ref[@]}"; do
+		# resolve stability layer for current repo
+		if ! layer=$(get_stability_layer_from_repo "${repo}"); then
+			error "Failed to get stability layer from repo %s" "${repo}"
+			return 1
+		fi
+
+		# assign all staged repo packages to the fast lookup table
+		read -ra pkgs <<< "${staging_ref[$repo]}"
+		for pkgfile in "${pkgs[@]}"; do
+			pkgname=$(getpkgname "${pkgfile}")
+			pkgver=$(getpkgver "${pkgfile}")
+			pkgarch=$(getpkgarch "${pkgfile}")
+
+			# ensure no duplicate pkgname exists in the same stability layer
+			# TODO: check for dupliace any+native variant
+			if [[ "${layer_lookup["${layer}::${pkgname}::${pkgarch}"]+exists}" ]]; then
+				error 'Package %s is staged in multiple repos of the same stability layer: %s and %s' \
+					"${pkgfile##*/}" "${repo}" "${layer_lookup["${layer}::${pkgname}::repo"]}"
+				return 1
+			fi
+
+			# assign lookup table data
+			layer_lookup["${layer}::${pkgname}::${pkgarch}"]="${pkgfile}"
+			layer_lookup["${layer}::${pkgname}::${pkgarch}::repo"]="${repo}"
+			layer_lookup["${layer}::${pkgname}::${pkgarch}::pkgver"]="${pkgver}"
+			layer_lookup["${layer}::${pkgname}::${pkgarch}::filename"]="${pkgfile##*/}"
+		done
+	done
+
+	# check pkgver of all staged packages across all stability layers
+	for repo in "${!staging_ref[@]}"; do
+		# resolve stability layer for current repo
+		if ! layer=$(get_stability_layer_from_repo "${repo}"); then
+			error "Failed to get stability layer from repo %s" "${repo}"
+			return 1
+		fi
+
+		# query all relevant layers between the current and outer layer
+		mapfile -t layers < <(get_stability_layer_between "${layer}" unstable)
+
+		# check each staging package
+		read -ra pkgs <<< "${staging_ref[$repo]}"
+		for pkgfile in "${pkgs[@]}"; do
+			pkgname=$(getpkgname "${pkgfile}")
+			pkgver=$(getpkgver "${pkgfile}")
+			pkgarch=$(getpkgarch "${pkgfile}")
+
+			# iterate through all layers above the current one
+			for layer_above in "${layers[@]}"; do
+				# skip layers that do not host the same package
+				if [[ ! "${layer_lookup["${layer_above}::${pkgname}::${pkgarch}"]+exists}" ]]; then
+					continue
+				fi
+
+				# compare current package against the current stability layer variant
+				pkgver_above="${layer_lookup["${layer_above}::${pkgname}::${pkgarch}::pkgver"]}"
+				if ! vercmp_result=$(vercmp "${pkgver_above}" "${pkgver}"); then
+					error "Package %s failed to compare version %s against repo version %s" \
+						"${pkgfile##*/}" "${pkgver}" "${pkgver_above}"
+					return 1
+				fi
+
+				# fail if a layer above the current one does not provide a newer variant
+				if ! (( vercmp_result > 0 )); then
+					error "Package %s staged in repo %s is not newer than package %s staged in repo %s" \
+						"${pkgfile##*/}" "${repo}" \
+						"${layer_lookup["${layer_above}::${pkgname}::${pkgarch}::filename"]}" \
+						"${layer_lookup["${layer_above}::${pkgname}::${pkgarch}::repo"]}"
+					return 1
+				fi
+			done
+		done
+	done
+
+	return 0
+}
+
 function array_append() {
 	local -n array_ref=$1
 	local key=$2

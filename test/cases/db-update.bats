@@ -386,3 +386,82 @@ load ../lib/common
 	run ! db-update
 	checkPackage extra pkg-any-a 1-2
 }
+
+@test "same pkgver in different staged repos fails" {
+	releasePackage extra pkg-any-a
+	releasePackage testing pkg-any-a
+
+	run ! db-update
+	run ! checkPackage extra pkg-any-a 1-1
+	run ! checkPackage testing pkg-any-a 1-1
+}
+
+@test "staged testing newer than staged extra" {
+	releasePackage extra pkg-any-a
+	updatePackage pkg-any-a
+	releasePackage testing pkg-any-a
+
+	db-update
+	checkPackage extra pkg-any-a 1-1
+	checkPackage testing pkg-any-a 1-2
+}
+
+@test "staged staging newer than staged testing" {
+	releasePackage testing pkg-any-a
+	updatePackage pkg-any-a
+	releasePackage staging pkg-any-a
+
+	db-update
+	checkPackage testing pkg-any-a 1-1
+	checkPackage staging pkg-any-a 1-2
+}
+
+@test "staged extra newer than staged testing fails" {
+	releasePackage testing pkg-any-a
+	updatePackage pkg-any-a
+	releasePackage extra pkg-any-a
+
+	run ! db-update
+	run ! checkPackage extra pkg-any-a 1-2
+	run ! checkPackage testing pkg-any-a 1-1
+}
+
+@test "staged extra newer than staged staging fails" {
+	releasePackage staging pkg-any-a
+	updatePackage pkg-any-a
+	releasePackage extra pkg-any-a
+
+	run ! db-update
+	run ! checkPackage extra pkg-any-a 1-2
+	run ! checkPackage staging pkg-any-a 1-1
+}
+
+@test "staged testing newer than staged staging fails" {
+	releasePackage staging pkg-any-a
+	updatePackage pkg-any-a
+	releasePackage testing pkg-any-a
+
+	run ! db-update
+	run ! checkPackage testing pkg-any-a 1-2
+	run ! checkPackage staging pkg-any-a 1-1
+}
+
+@test "staged multiple times in same stability layer fails" {
+	releasePackage extra pkg-any-a
+	updatePackage pkg-any-a
+	releasePackage core pkg-any-a
+
+	run ! db-update
+	run ! checkPackage extra pkg-any-a 1-1
+	run ! checkPackage core pkg-any-a 1-2
+}
+
+@test "staged multiple times in same repo fails" {
+	releasePackage extra pkg-any-a
+	updatePackage pkg-any-a
+	releasePackage extra pkg-any-a
+
+	run ! db-update
+	run ! checkPackage extra pkg-any-a 1-1
+	run ! checkPackage extra pkg-any-a 1-2
+}

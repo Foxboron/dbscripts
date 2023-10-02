@@ -107,6 +107,9 @@ for repo in "${!staging[@]}"; do
 	done
 done
 
+if ! check_staged_versions staging; then
+	die "Ensure that staged packages in outer stability layers must be newer and not staged multiple times in the same layer."
+fi
 if ! check_reproducible staging; then
 	die "Ensure that all dependencies are available in the repositories or are added in the same db-update."
 fi
