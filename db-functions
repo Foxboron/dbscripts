@@ -682,16 +682,24 @@ arch_repo_modify() {
 	local arch=$3
 	local pkgs=("${@:4}")
 	local dbfile="${FTP_BASE}/${repo}/os/${arch}/${repo}${DBEXT}"
+	local repo_action_opts=(--quiet)
 
 	if [[ ${action} = remove && ! -f ${dbfile} ]]; then
 		error "No database found at '%s'" "$dbfile"
 		return 1
 	fi
 
+	if [[ ${action} = add ]]; then
+		repo_action_opts+=(--prevent-downgrade)
+	fi
+
 	# package files for repo-add might be relative to repo dir
 	pushd "${dbfile%/*}" >/dev/null
-	/usr/bin/"repo-${action}" -q "${dbfile}" "${pkgs[@]}" \
-		|| error '%s' "repo-${action} ${dbfile@Q} ${pkgs[*]@Q}"
+	if ! /usr/bin/"repo-${action}" "${repo_action_opts[@]}" "${dbfile}" "${pkgs[@]}"; then
+		error '%s' "repo-${action} ${repo_action_opts[*]@Q} ${dbfile@Q} ${pkgs[*]@Q}"
+		popd >/dev/null
+		return 1
+	fi
 	set_repo_permission "${repo}" "${arch}"
 	popd >/dev/null
 
