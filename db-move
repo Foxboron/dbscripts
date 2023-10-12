@@ -16,6 +16,11 @@ ftppath_debug_from="${FTP_BASE}/${repo_from}-debug/os/"
 ftppath_to="${FTP_BASE}/${repo_to}/os/"
 ftppath_debug_to="${FTP_BASE}/${repo_to}-debug/os/"
 
+# filter out duplicates
+pkgbases=("${args[@]:2}")
+mapfile -t pkgbases < <(printf '%s\n' "${pkgbases[@]}" | sort --unique)
+
+
 check_leapfrog=false
 if in_array "${repo_from}" "${STAGING_REPOS[@]}" && in_array "${repo_to}" "${STABLE_REPOS[@]}"; then
 	check_leapfrog=true
@@ -42,7 +47,7 @@ for pkgarch in "${ARCHES[@]}"; do
 done
 
 # check if packages to be moved exist in version control and ftp dir
-for pkgbase in "${args[@]:2}"; do
+for pkgbase in "${pkgbases[@]}"; do
 	found=false
 	for pkgarch in "${ARCHES[@]}"; do
 		if vcsrepo_from=$(find_repo_for_package "${pkgbase}" "${pkgarch}" "${repo_from}"); then
@@ -86,7 +91,7 @@ for arch in "${ARCHES[@]}"; do
 	declare -a remove_pkgs_$arch
 	declare -a remove_debug_pkgs_$arch
 done
-for pkgbase in "${args[@]:2}"; do
+for pkgbase in "${pkgbases[@]}"; do
 	tag_list=""
 	for pkgarch in "${ARCHES[@]}" 'any'; do
 		vcsrepo_from=$(find_repo_for_package "${pkgbase}" "${pkgarch}" "${repo_from}")
@@ -160,7 +165,7 @@ done
 # Only modify repository if everything else has been done
 # We really don't want it to represent a broken state
 if ((REPO_MODIFIED)); then
-	for pkgbase in "${args[@]:2}"; do
+	for pkgbase in "${pkgbases[@]}"; do
 		read -r -a tarches <<< "${pkgbase_arches[${pkgbase}]}"
 		for tarch in "${tarches[@]}"; do
 			if ! vcs_move_package "${pkgbase}" "${repo_from}-${tarch}" "${repo_to}-${tarch}"; then
