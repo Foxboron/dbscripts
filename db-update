@@ -6,6 +6,8 @@
 set -eo pipefail
 shopt -s nullglob
 
+colorize
+
 if (( $# >= 1 )); then
 	warning "Calling %s with a specific repository is no longer supported" "${0##*/}"
 	exit 1
