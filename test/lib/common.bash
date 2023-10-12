@@ -70,6 +70,32 @@ __isGlobfile() {
 	[[ -f $1 ]]
 }
 
+##
+#  usage : lock( $fd, $file )
+##
+lock() {
+	# Only reopen the FD if it wasn't handed to us
+	if ! [[ "/dev/fd/$1" -ef "$2" ]]; then
+		mkdir -p -- "$(dirname -- "$2")"
+		eval "exec $1>"'"$2"'
+	fi
+
+	if ! flock --wait 600 "$1"; then
+		error "Failed to acquire lock on %s" "$2"
+		exit 1
+	fi
+}
+
+##
+#  usage : lock_close( $fd )
+##
+lock_close() {
+	local fd=$1
+	# https://github.com/koalaman/shellcheck/issues/862
+	# shellcheck disable=2034
+	exec {fd}>&-
+}
+
 __buildPackage() {
 	local pkgdest=${1:-.}
 	local p
@@ -80,10 +106,12 @@ __buildPackage() {
 
 	if [[ -n ${BUILDDIR} ]]; then
 		cache=${BUILDDIR}/$(__getCheckSum PKGBUILD)
+		mkdir -p "${cache}"
+		lock 9 "${cache}/.lock"
+
 		if cp -Lv ${cache}/*${PKGEXT}{,.sig} ${pkgdest} 2>/dev/null; then
+			lock_close 9
 			return 0
-		else
-			mkdir -p ${cache}
 		fi
 	fi
 
@@ -110,6 +138,7 @@ __buildPackage() {
 			cp -Lv ${p}{,.sig} ${cache}/
 		fi
 	done
+	lock_close 9
 }
 
 __archrelease() {
@@ -194,12 +223,6 @@ ${username} <${username}@yay> doo
 eot
 
 	. config
-
-	git config --global user.email "tester@localhost"
-	git config --global user.name "Bob Tester"
-	git config --global init.defaultBranch main
-	git config --global advice.detachedHead false
-
 
 	# This is for our git clones when initializing bare repos
 	TMP_WORKDIR_GIT=${TMP}/git-clones

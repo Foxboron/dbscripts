@@ -54,6 +54,10 @@ RUN pacman-key --init && \
 		/srv/ftp/{{core,extra,multilib}{,-testing,-staging},gnome-unstable}/os/x86_64/ && \
 	echo -e "[safe]\n\tdirectory = *\n" > /etc/gitconfig
 
+# TODO: temporary hack to work around bats packaging bug
+RUN sed 's/libexec/lib/g' -i /usr/lib/bats/* && \
+	sed 's/bats-core/bats/g' -i /usr/lib/bats/*
+
 USER tester
 
 RUN echo -e "\

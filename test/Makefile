@@ -1,5 +1,6 @@
 CASES ?= cases
-BATS_ARGS ?=
+JOBS ?= $(shell nproc)
+BATS_ARGS ?= --jobs $(JOBS) --verbose-run
 
 test:
 	BUILDDIR=/build PATH=$(CURDIR)/../:$(CURDIR)/../cron-jobs/:$(PATH) bats $(BATS_ARGS) $(CASES)

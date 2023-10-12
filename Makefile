@@ -1,7 +1,8 @@
 IMAGE:=dbscripts/test
 RUN_OPTIONS:=--rm --network=none -v $(PWD):/dbscripts:ro --tmpfs=/tmp:exec -w /dbscripts/test
 CASES ?= cases
-BATS_ARGS ?=
+JOBS ?= $(shell nproc)
+BATS_ARGS ?= --jobs $(JOBS) --verbose-run
 DOCKER ?= docker
 
 test-image:
