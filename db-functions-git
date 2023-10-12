@@ -62,6 +62,10 @@ fetch_pkgbuild() {
 	project_path=$(gitlab_project_name_to_path "${pkgbase}")
 	src="${GIT_PACKAGING_REPOS_URL}/${project_path}.git"
 	target="${GIT_PACKAGES_CACHE}/${pkgbase}"
+
+	# avoid git operations asking for terminal input
+	export GIT_TERMINAL_PROMPT=0
+
 	if [[ ! -d $target ]]; then
 		if ! arch_git -c core.sharedRepository=group clone --origin origin --bare --mirror "${src}" "${target}"; then
 			return 1
