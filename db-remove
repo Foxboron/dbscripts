@@ -3,15 +3,79 @@
 . "$(dirname "$(readlink -e "$0")")/config"
 . "$(dirname "$(readlink -e "$0")")/db-functions"
 
-if (( $# < 3 )); then
-	msg "usage: %s <repo> <arch> <pkgname|pkgbase> ..." "${0##*/}"
+set -eo pipefail
+shopt -s nullglob
+
+colorize
+
+usage() {
+	cat <<- _EOF_
+	Usage: ${BASH_SOURCE[0]##*/} [OPTIONS] REPO PKGBASE...
+
+	OPTIONS:
+	    -a, --arch ARCH    Remove packages exclusively from ARCH instead of everywhere
+	    --partial          Remove only specific partial pkgnames from a split package
+	                       This leaves debug packages and pkgbase entries in the state repo
+	    -h, --help         Show this help text
+_EOF_
+}
+
+pkgbase_mode=1
+arch=any
+
+# option checking
+while (( $# )); do
+	case $1 in
+		-h|--help)
+			usage
+			exit 0
+			;;
+		-a|--arch)
+			(( $# <= 1 )) && die "missing argument for %s" "$1"
+			arch=$2
+			shift 2
+			if [[ "${arch}" != any ]] && ! in_array "${arch}" "${ARCHES[@]}"; then
+				die "invalid architecture: %s" "${arch}"
+			fi
+			;;
+		--partial)
+			pkgbase_mode=0
+			warning "Removing only partial pkgnames from a split package"
+			warning "This leaves debug packages and pkgbase entries in the state repo"
+			shift
+			;;
+		-*)
+			die "invalid argument: %s" "$1"
+			;;
+		*)
+			break
+			;;
+	esac
+done
+
+if (( $# < 2 )); then
+	usage
 	exit 1
 fi
 
-repo="$1"
-arch="$2"
-pkgbases=("${@:3}")
+if [[ $arch = any ]]; then
+	tarches=("${ARCHES[@]}")
+	vcsarches=("${ARCHES[@]}")
+	vcsarches+=(any)
+else
+	tarches=("$arch")
+	vcsarches=("$arch")
+fi
 
+repo="$1"
+pkgbases=("${@:2}")
+
+# filter out duplicates
+mapfile -t pkgbases < <(printf '%s\n' "${pkgbases[@]}" | sort --unique)
+
+if ! in_array "${repo}" "${PKGREPOS[@]}"; then
+	die "Unknown target repository %s" "${repo}"
+fi
 if ! check_repo_permission "$repo"; then
 	die "You don't have permission to remove packages from %s" "$repo"
 fi
@@ -19,12 +83,16 @@ if ! check_author; then
 	die "You don't have a matching author mapping"
 fi
 
-if [[ $arch = any ]]; then
-	tarches=("${ARCHES[@]}")
-else
-	tarches=("$arch")
+# Fetch all pkgbase repositories once
+if (( pkgbase_mode )); then
+	for pkgbase in "${pkgbases[@]}"; do
+		if ! fetch_pkgbuild "${pkgbase}"; then
+			die "Couldn't find package %s in git!" "${pkgbase}"
+		fi
+	done
 fi
 
+# lock repos
 for tarch in "${tarches[@]}"; do
 	repo_lock "$repo" "$tarch" || exit 1
 done
@@ -32,31 +100,59 @@ done
 declare -A remove_pkgbases
 declare -A remove_pkgs
 declare -A remove_debug_pkgs
+declare -A handled_pkgbaes
 
 for pkgbase in "${pkgbases[@]}"; do
-	msg "Removing %s from [%s]..." "$pkgbase" "$repo"
-
-	for tarch in "${tarches[@]}" any; do
+	for tarch in "${vcsarches[@]}"; do
 		vcsrepo="$repo-$tarch"
 
 		# check to remove whole pkgbase or parts of a split package
-		if fetch_pkgbuild "${pkgbase}" && \
-				_pkgver=$(pkgver_from_state_repo "${pkgbase}" "${vcsrepo}") && \
-				mapfile -t pkgnames < <(source_pkgbuild "${pkgbase}" "${_pkgver}" && printf "%s\n" "${pkgname[@]}"); then
-			array_append remove_pkgbases "${vcsrepo}" "${pkgbase}"
-			array_append remove_pkgs "${tarch}" "${pkgnames[*]}"
-		elif is_globfile "${FTP_BASE}/${repo}/os/${tarch}/${pkgbase}"-*-*-*.pkg.tar*; then
-			warning "pkgbase %s not found in %s - removing only pkgname" "$pkgbase" "$vcsrepo"
-			warning "If %s was a split package you have to pass its pkgbase to remove it completely!" "$pkgbase"
-			array_append remove_pkgs "${tarch}" "${pkgbase}"
+		if (( ! pkgbase_mode )); then
+			# check to remove split packages
+			if is_globfile "${FTP_BASE}/${repo}/os/${tarch}/${pkgbase}"-*-*-*.pkg.tar*; then
+				msg "Removing %s from %s [%s]..." "${pkgbase}" "${repo}" "${tarch}"
+				array_append remove_pkgs "${tarch}" "${pkgbase}"
+				handled_pkgbaes["${pkgbase}"]=1
+			fi
+			continue
 		fi
 
-		# check to remove debug packages
-		if is_globfile "${FTP_BASE}/${repo}-debug/os/${tarch}/${pkgbase}-debug"-*-*-*.pkg.tar*; then
-			msg "Found debug package. Removing %s from [%s]..." "${pkgbase}-debug" "${repo}-debug"
-			array_append remove_debug_pkgs "${tarch}" "${pkgbase}-debug"
+		# try to get pkgbase metadata from state repo
+		if ! _pkgver=$(pkgver_from_state_repo "${pkgbase}" "${vcsrepo}"); then
+			continue
 		fi
+
+		array_append remove_pkgbases "${vcsrepo}" "${pkgbase}"
+		handled_pkgbaes["${pkgbase}"]=1
+
+		# loop through all arches for any packages
+		remove_arches=("${tarch}")
+		if [[ ${tarch} == any ]]; then
+			remove_arches=("${tarches[@]}")
+		fi
+
+		# remove pkgnames
+		mapfile -t pkgnames  < <(source_pkgbuild "${pkgbase}" "${_pkgver}" && printf "%s\n" "${pkgname[@]}")
+		for remove_arch in "${remove_arches[@]}"; do
+			msg "Removing %s from %s [%s]..." "${pkgbase}" "${repo}" "${remove_arch}"
+			array_append remove_pkgs "${remove_arch}" "${pkgnames[*]}"
+		done
+
+		# check to remove debug packages
+		for remove_arch in any "${remove_arches[@]}"; do
+			if is_globfile "${FTP_BASE}/${repo}-debug/os/${remove_arch}/${pkgbase}-debug"-*-*-*.pkg.tar*; then
+				msg "Found debug package. Removing %s from %s [%s]..." "${pkgbase}-debug" "${repo}-debug" "${remove_arch}"
+				array_append remove_debug_pkgs "${remove_arch}" "${pkgbase}-debug"
+			fi
+		done
 	done
+done
+
+# check for unhandled arguments before executing
+for pkgbase in "${pkgbases[@]}"; do
+	if [[ ! "${handled_pkgbaes["${pkgbase}"]+exists}" ]]; then
+		die "Package not found in %s: %s" "${repo}" "${pkgbase}"
+	fi
 done
 
 # remove binary repo packages

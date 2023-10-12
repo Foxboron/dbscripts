@@ -14,7 +14,7 @@ load ../lib/common
 
 	for pkgbase in ${pkgs[@]}; do
 		for arch in ${arches[@]}; do
-			db-remove extra ${arch} ${pkgbase}
+			db-remove --arch ${arch} extra ${pkgbase}
 			run ! checkStateRepoContains extra ${arch} ${pkgbase}
 		done
 	done
@@ -39,7 +39,7 @@ load ../lib/common
 
 	for pkgbase in ${pkgs[@]}; do
 		for arch in ${arches[@]}; do
-			db-remove extra ${arch} ${pkgbase}
+			db-remove --arch ${arch} extra ${pkgbase}
 			run ! checkStateRepoContains extra ${arch} ${pkgbase}
 		done
 	done
@@ -51,6 +51,8 @@ load ../lib/common
 }
 
 @test "remove specific debug package" {
+	skip "removing only debug packages is currently unsupported"
+
 	local arches=('i686' 'x86_64')
 	local pkgs=('pkg-split-debuginfo')
 	local debug_pkgs=('pkg-split-debuginfo')
@@ -67,7 +69,7 @@ load ../lib/common
     # without removing the repo packages
 	for pkgbase in ${debug_pkgs[@]}; do
 		for arch in ${arches[@]}; do
-			db-remove extra-debug ${arch} ${pkgbase}-debug
+			db-remove --arch ${arch} extra-debug ${pkgbase}-debug
 			checkStateRepoContains extra ${arch} ${pkgbase}
 		done
 	done
@@ -90,7 +92,7 @@ load ../lib/common
 	db-update
 
 	for arch in ${arches[@]}; do
-		db-remove extra ${arch} ${pkgs[@]}
+		db-remove --arch ${arch} extra ${pkgs[@]}
 	done
 
 	for pkgbase in ${pkgs[@]}; do
@@ -109,7 +111,7 @@ load ../lib/common
 	db-update
 
 	for arch in ${arches[@]}; do
-		db-remove extra "${arch}" pkg-split-a1
+		db-remove --arch "${arch}" --partial extra pkg-split-a1
 		checkStateRepoContains extra ${arch} pkg-split-a
 
 		for db in db files; do
@@ -132,7 +134,7 @@ load ../lib/common
 	db-update
 
 	for pkgbase in ${pkgs[@]}; do
-		db-remove extra any ${pkgbase}
+		run -0 db-remove extra ${pkgbase}
 	done
 
 	for pkgbase in ${pkgs[@]}; do
@@ -150,7 +152,7 @@ load ../lib/common
 	db-update
 	disablePermissionOverride
 
-	run ! db-remove noperm any ${pkgbase}
+	run ! db-remove noperm ${pkgbase}
 
 	checkPackage noperm ${pkgbase} 1-1
 }
@@ -159,7 +161,7 @@ load ../lib/common
 	releasePackage testing pkg-any-a
 	db-update
 
-	db-remove testing any pkg-any-a
+	db-remove testing pkg-any-a
 
 	checkRemovedPackage testing pkg-any-a
 	checkStateRepoAutoredBy "Bob Tester <tester@localhost>"
@@ -170,7 +172,7 @@ load ../lib/common
 	db-update
 
 	emptyAuthorsFile
-	run ! db-remove testing any pkg-any-a
+	run ! db-remove testing pkg-any-a
 
 	checkPackage testing pkg-any-a 1-1
 }
@@ -183,10 +185,36 @@ load ../lib/common
 	releasePackage extra ${pkgbase}
 
 	db-update
-	db-remove extra any ${pkgbase}
+	db-remove extra ${pkgbase}
 
 	checkRemovedPackage extra ${pkgbase}
 	for arch in ${arches[@]}; do
 		run ! checkStateRepoContains extra ${arch} ${pkgbase}
 	done
+}
+
+@test "remove duplicate packages in command" {
+	local pkgbase=pkg-simple-a
+	local arches=('i686' 'x86_64')
+	local arch
+
+	releasePackage extra ${pkgbase}
+
+	db-update
+	db-remove extra ${pkgbase} ${pkgbase}
+
+	checkRemovedPackage extra ${pkgbase}
+	for arch in ${arches[@]}; do
+		run ! checkStateRepoContains extra ${arch} ${pkgbase}
+	done
+}
+
+@test "remove none existing pkgbase fails" {
+	releasePackage extra pkg-any-a
+	db-update
+
+	run ! db-remove extra pkg-any-a zdoesnotexist
+	[[ $output == *"Couldn't find package zdoesnotexist"* ]]
+
+	checkPackage extra pkg-any-a 1-1
 }

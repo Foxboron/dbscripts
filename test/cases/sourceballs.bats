@@ -73,9 +73,7 @@ __checkRemovedSourcePackage() {
 	db-update
 	sourceballs
 
-	for arch in ${arches[@]}; do
-		db-remove extra ${arch} pkg-simple-a
-	done
+	db-remove extra pkg-simple-a
 
 	sourceballs
 	__checkRemovedSourcePackage pkg-simple-a

@@ -40,9 +40,7 @@ __checkRepoRemovedPackage() {
 
 	db-update
 
-	for arch in ${arches[@]}; do
-		db-remove extra ${arch} pkg-simple-a
-	done
+	db-remove extra pkg-simple-a
 
 	ftpdir-cleanup
 
@@ -65,9 +63,7 @@ __checkRepoRemovedPackage() {
 	done
 	db-update
 
-	for arch in ${arches[@]}; do
-		db-remove extra ${arch} "${pkgs[0]}"
-	done
+	db-remove extra "${pkgs[0]}"
 
 	ftpdir-cleanup
 
@@ -145,9 +141,7 @@ __checkRepoRemovedPackage() {
 	done
 	db-update
 
-	for arch in ${arches[@]}; do
-		db-remove extra ${arch} "${pkgs[0]}"
-	done
+	db-remove extra "${pkgs[0]}"
 
 	ftpdir-cleanup
 
@@ -173,9 +167,7 @@ __checkRepoRemovedPackage() {
 
 	db-update
 
-	for arch in ${arches[@]}; do
-		db-remove extra ${arch} pkg-simple-epoch
-	done
+	db-remove extra pkg-simple-epoch
 
 	ftpdir-cleanup
 
@@ -196,7 +188,7 @@ __checkRepoRemovedPackage() {
 	done
 
 	db-update
-	db-remove extra any pkg-any-a
+	db-remove extra pkg-any-a
 	ftpdir-cleanup
 
 	local pkg1="pkg-any-a-1-1-any${PKGEXT}"
@@ -221,9 +213,7 @@ __checkRepoRemovedPackage() {
 
 	db-update
 
-	for arch in ${arches[@]}; do
-		db-remove extra ${arch} ${pkgs[0]}
-	done
+	db-remove extra ${pkgs[0]}
 
 	ftpdir-cleanup
 
@@ -248,21 +238,31 @@ __checkRepoRemovedPackage() {
 	db-update
 
 	for pkgbase in ${pkgs[@]}; do
-		for arch in ${arches[@]}; do
-			db-remove extra ${arch} ${pkgbase}
-		done
+		db-remove extra ${pkgbase}
 	done
 
 	ftpdir-cleanup
 
-	local pkgfilea="pkg-simple-a-1-1-${arch}${PKGEXT}"
-	local pkgfileb="pkg-simple-b-1-1-${arch}${PKGEXT}"
 	for arch in ${arches[@]}; do
+		local pkgfilea="pkg-simple-a-1-1-${arch}${PKGEXT}"
+		local pkgfileb="pkg-simple-b-1-1-${arch}${PKGEXT}"
+
+		[ -f ${CLEANUP_DESTDIR}/${pkgfilea} ]
+		[ -f ${CLEANUP_DESTDIR}/${pkgfileb} ]
+	done
+
+	for arch in ${arches[@]}; do
+		local pkgfilea="pkg-simple-a-1-1-${arch}${PKGEXT}"
 		touch -d "-$(expr ${CLEANUP_KEEP} + 1)days" ${CLEANUP_DESTDIR}/${pkgfilea}{,.sig}
 	done
 
 	ftpdir-cleanup
 
-	[ ! -f ${CLEANUP_DESTDIR}/${pkgfilea} ]
-	[ -f ${CLEANUP_DESTDIR}/${pkgfileb} ]
+	for arch in ${arches[@]}; do
+		local pkgfilea="pkg-simple-a-1-1-${arch}${PKGEXT}"
+		local pkgfileb="pkg-simple-b-1-1-${arch}${PKGEXT}"
+
+		[ ! -f ${CLEANUP_DESTDIR}/${pkgfilea} ]
+		[ -f ${CLEANUP_DESTDIR}/${pkgfileb} ]
+	done
 }

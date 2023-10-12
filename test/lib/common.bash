@@ -163,7 +163,7 @@ setup() {
 	UNSTABLE_REPOS=(unstable)
 	STAGING_REPOS=('staging')
 	TESTING_REPOS=('testing')
-	STABLE_REPOS=('core' 'extra')
+	STABLE_REPOS=('core' 'extra' 'noperm')
 	CLEANUP_DESTDIR="${TMP}/package-cleanup"
 	SOURCE_CLEANUP_DESTDIR="${TMP}/source-cleanup"
 	STAGING="${TMP}/staging"
