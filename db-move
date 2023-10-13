@@ -6,6 +6,8 @@
 set -eo pipefail
 shopt -s nullglob
 
+colorize
+
 if (( $# < 3 )); then
 	msg "usage: %s <repo-from> <repo-to> <pkgname|pkgbase> ..." "${0##*/}"
 	exit 1
