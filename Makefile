@@ -17,6 +17,9 @@ test-coverage: test-image
 	mkdir -m 777 ${PWD}/coverage
 	$(DOCKER) run  $(RUN_OPTIONS) -v ${PWD}/coverage:/coverage -e COVERAGE_DIR=/coverage $(IMAGE) make test-coverage
 
+dev-env: test-image
+	$(DOCKER) run $(RUN_OPTIONS) --tty --interactive $(IMAGE) /bin/bash
+
 check:
 	shellcheck -S error db-* testing2x
 
