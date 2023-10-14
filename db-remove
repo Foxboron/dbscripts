@@ -69,6 +69,10 @@ fi
 
 repo="$1"
 pkgbases=("${@:2}")
+# TODO: Temporary compatibility mode for more fluent rollout
+if [[ "$2" == any ]]; then
+	pkgbases=("${@:3}")
+fi
 
 # filter out duplicates
 mapfile -t pkgbases < <(printf '%s\n' "${pkgbases[@]}" | sort --unique)
