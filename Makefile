@@ -1,5 +1,6 @@
 IMAGE:=dbscripts/test
-RUN_OPTIONS:=--rm --network=none -v $(PWD):/dbscripts:ro --tmpfs=/tmp:exec -w /dbscripts/test
+NETWORK:=none
+RUN_OPTIONS:=--rm --network=$(NETWORK) -v $(PWD):/dbscripts:ro --tmpfs=/tmp:exec -w /dbscripts/test
 CASES ?= cases
 JOBS ?= $(shell nproc)
 BATS_ARGS ?= --jobs $(JOBS) --verbose-run
