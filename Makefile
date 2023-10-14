@@ -4,7 +4,7 @@ RUN_OPTIONS:=--rm --network=$(NETWORK) -v $(PWD):/dbscripts:ro --tmpfs=/tmp:exec
 CASES ?= cases
 JOBS ?= $(shell nproc)
 BATS_ARGS ?= --jobs $(JOBS) --verbose-run
-DOCKER ?= docker
+DOCKER ?= podman
 
 test-image:
 	$(DOCKER) build --pull -t $(IMAGE) test

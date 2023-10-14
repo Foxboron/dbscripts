@@ -56,8 +56,8 @@ Things that haven't been mentioned yet:
  - `cron-jobs/sourceballs`
 ## Testing
 * Install the `make` and `podman` or `docker` packages depending on your
-preferrence. The default expects docker but pomdan can be used if
-`DOCKER=podman` is specified. When using docker, start the docker daemon by
+preferrence. The default expects podman but docker can be used if
+`DOCKER=docker` is specified. When using docker, start the docker daemon by
 issuing `systemctl start docker`.
 * The test suite can now be run with `make test`.
 * A coverage report can be generated with `make test-coverage`. Open `coverage/index.html` in your web browser to inspect the results.
@@ -65,7 +65,7 @@ issuing `systemctl start docker`.
 Bats arguments or specific test can be run by providing `CASES` and `BATS_ARGS`:
 
 ```
-make test DOCKER=podman CASES=cases/db-update.bats BATS_ARGS='-f Wrong'
+make test CASES=cases/db-update.bats BATS_ARGS='-f Wrong'
 ```
 
 ## License

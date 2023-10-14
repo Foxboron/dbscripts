@@ -8,14 +8,14 @@ lint:
 test:
   script:
     - pacman -Syu --needed --noconfirm podman make
-    - make test DOCKER=podman
+    - make test
   tags:
     - vm
 
 code-coverage:
   script:
     - pacman -Syu --needed --noconfirm podman make jq
-    - make test-coverage DOCKER=podman 2>/dev/null
+    - make test-coverage 2>/dev/null
     - "echo \"Percent coverage: $(jq -r .percent_covered coverage/bats.*/coverage.json)%\""
   tags:
     - vm
