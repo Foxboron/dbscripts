@@ -440,6 +440,21 @@ getpkgfile() {
 	echo "${1}"
 }
 
+meassure() {
+	date +"%s%3N"
+}
+
+duration() {
+	label=$1
+	t1=$2
+	t2=${3:-}
+	if [[ -z $t2 ]]; then
+		t2=$(meassure)
+	fi
+	duration=$(( t2 - t1 ))
+	echo "${label}: ${duration} ms"
+}
+
 getpkgfiles() {
 	local f files
 	if ! printf '%s\n' "${@%\.*}" | awk 'a[$0]++{exit 1}'; then
