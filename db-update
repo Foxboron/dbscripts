@@ -137,9 +137,9 @@ done
 
 for repo in "${!staging[@]}"; do
 	msg "Updating [%s]..." "$repo"
-	declare -A add_vcspkgs
-	declare -A pkgfile_metadata
-	declare -A pkgkeys
+	declare -A add_vcspkgs=()
+	declare -A pkgfile_metadata=()
+	declare -A pkgkeys=()
 	read -ra any_pkgs <<< "${staging_by_arch[${repo}::any]}"
 	for pkgarch in "${ARCHES[@]}"; do
 		add_pkgs=()
