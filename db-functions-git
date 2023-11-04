@@ -204,6 +204,8 @@ vcs_update_package() {
 	local gittag
 	gittag="$(gittag_from_pkgver "${pkgver}")"
 
+	lock 8 "${GIT_STATE_REPO}/.git/dbscripts.lock" "Locking state repo"
+
 	mkdir -p "${GIT_STATE_REPO}/${dest}"
 	printf '%s %s %s %s\n' \
 		"${pkgbase}" \
@@ -211,8 +213,6 @@ vcs_update_package() {
 		"${gittag}" \
 		"$(git -C "${GIT_PACKAGES_CACHE}/${pkgbase}" rev-parse "${gittag}")" \
 		> "${GIT_STATE_REPO}/${dest}/${pkgbase}"
-
-	lock 8 "${GIT_STATE_REPO}/.git/dbscripts.lock" "Locking state repo"
 
 	arch_git -C "${GIT_STATE_REPO}" add "${GIT_STATE_REPO}/${dest}/${pkgbase}"
 	vcs_commit "update ${pkgbase} to ${pkgver} in ${dest}"
