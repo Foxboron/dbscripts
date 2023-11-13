@@ -902,7 +902,7 @@ check_staged_versions() {
 			# TODO: check for dupliace any+native variant
 			if [[ "${layer_lookup["${layer}::${pkgname}::${pkgarch}"]+exists}" ]]; then
 				error 'Package %s is staged in multiple repos of the same stability layer: %s and %s' \
-					"${pkgfile##*/}" "${repo}" "${layer_lookup["${layer}::${pkgname}::repo"]}"
+					"${pkgfile##*/}" "${repo}" "${layer_lookup["${layer}::${pkgname}::${pkgarch}::repo"]}"
 				return 1
 			fi
 
