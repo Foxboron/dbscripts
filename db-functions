@@ -475,26 +475,56 @@ getpkgfiles() {
 
 check_pkgfile() {
 	local pkgfile=$1
+	local filename pkgname pkgver pkgarch
 
-	local pkgname="$(getpkgname "${pkgfile}")" || return 1
-	local pkgver="$(getpkgver "${pkgfile}")" || return 1
-	local pkgarch="$(getpkgarch "${pkgfile}")" || return 1
+	# check if basic properties can be read
+	if ! pkgname="$(getpkgname "${pkgfile}")"; then
+		return 1;
+	fi
+	if ! pkgver="$(getpkgver "${pkgfile}")"; then
+		return 1
+	fi
+	if ! pkgarch="$(getpkgarch "${pkgfile}")"; then
+		return 1
+	fi
 
-	in_array "${pkgarch}" "${ARCHES[@]}" 'any' || return 1
+	# check for valid arch
+	if ! in_array "${pkgarch}" "${ARCHES[@]}" 'any'; then
+		return 1
+	fi
 
-	[[ ${pkgfile##*/} = "${pkgname}-${pkgver}-${pkgarch}"* ]]
+	# check if the filename matches metadata
+	filename=${pkgfile##*/}
+	if [[ ${filename} != "${pkgname}-${pkgver}-${pkgarch}"* ]]; then
+		return 1
+	fi
+
+	return 0
 }
 
 # Check that the package file is consistent with the PKGBUILD in version control
 check_pkgvcs() {
 	local pkgfile="${1}"
 	local repo="${2}"
-	local _pkgbase="$(getpkgbase "${pkgfile}")" || return 1
-	local _pkgname="$(getpkgname "${pkgfile}")" || return 1
-	local _pkgver="$(getpkgver "${pkgfile}")" || return 1
-	local _pkgarch="$(getpkgarch "${pkgfile}")" || return 1
+	local _pkgbase _pkgname _pkgver _pkgarch
 
-	in_array "${repo}" "${PKGREPOS[@]}" || return 1
+	# check if basic properties can be read
+	if ! _pkgbase="$(getpkgbase "${pkgfile}")"; then
+		error "failed to get pkgbase from %s" "${pkgfile}"
+		return 1
+	fi
+	if ! _pkgname="$(getpkgname "${pkgfile}")"; then
+		error "failed to get pkgame from %s" "${pkgfile}"
+		return 1
+	fi
+	if ! _pkgver="$(getpkgver "${pkgfile}")"; then
+		error "failed to get pkgver from %s" "${pkgfile}"
+		return 1
+	fi
+	if ! _pkgarch="$(getpkgarch "${pkgfile}")"; then
+		error "failed to get arch from %s" "${pkgfile}"
+		return 1
+	fi
 
 	local vcsver vcsnames=()
 	read -rd'\n' vcsver vcsnames < <(source_pkgbuild "${_pkgbase}" "${_pkgver}"; \
@@ -548,17 +578,42 @@ check_splitpkgs() {
 	return 0
 }
 
+# Check if the package already exists in another repository
 check_pkgrepos() {
 	local pkgfile=$1
+	local pkgname pkgver pkgarch
 
-	local pkgname="$(getpkgname "${pkgfile}")" || return 1
-	local pkgver="$(getpkgver "${pkgfile}")" || return 1
-	local pkgarch="$(getpkgarch "${pkgfile}")" || return 1
+	# read metadata from pcakage file
+	if ! pkgname="$(getpkgname "${pkgfile}")"; then
+		error "failed to get pkgname from %s" "${pkgfile}"
+		return 1
+	fi
+	if ! pkgver="$(getpkgver "${pkgfile}")"; then
+		error "failed to get pkgver from %s" "${pkgfile}"
+		return 1
+	fi
+	if ! pkgarch="$(getpkgarch "${pkgfile}")"; then
+		error "failed to get arch from %s" "${pkgfile}"
+		return 1
+	fi
 
-	is_globfile "${FTP_BASE}/${PKGPOOL}/${pkgname}-${pkgver}-${pkgarch}"${PKGEXTS} && return 1
-	is_globfile "${FTP_BASE}/${PKGPOOL}/${pkgname}-${pkgver}-${pkgarch}"${PKGEXTS}.sig && return 1
-	[[ -f ${FTP_BASE}/${PKGPOOL}/${pkgfile##*/} ]] && return 1
-	[[ -f ${FTP_BASE}/${PKGPOOL}/${pkgfile##*/}.sig ]] && return 1
+	# check if package file already exists in the pool
+	if [[ -f ${FTP_BASE}/${PKGPOOL}/${pkgfile##*/} ]]; then
+		return 1
+	fi
+	# check if signature file already exists in the pool
+	if [[ -f ${FTP_BASE}/${PKGPOOL}/${pkgfile##*/}.sig ]]; then
+		return 1
+	fi
+
+	# check if package file already exists in the pool with any other extension
+	if is_globfile "${FTP_BASE}/${PKGPOOL}/${pkgname}-${pkgver}-${pkgarch}"${PKGEXTS}; then
+		return 1
+	fi
+	# check if signature file already exists in the pool with any other extension
+	if is_globfile "${FTP_BASE}/${PKGPOOL}/${pkgname}-${pkgver}-${pkgarch}"${PKGEXTS}.sig; then
+		return 1
+	fi
 
 	return 0
 }
