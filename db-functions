@@ -526,13 +526,37 @@ check_pkgvcs() {
 		return 1
 	fi
 
-	local vcsver vcsnames=()
-	read -rd'\n' vcsver vcsnames < <(source_pkgbuild "${_pkgbase}" "${_pkgver}"; \
-	                                 get_full_version; echo "${pkgname[@]}")
-	read -ra vcsnames <<<"${vcsnames}"
+	# check if target repository is valid
+	if ! in_array "${repo}" "${PKGREPOS[@]}"; then
+		error "invalid target repo: %s" "${repo}"
+		return 1;
+	fi
 
-	[[ "${vcsver}" = "${_pkgver}" ]] || return 1
-	in_array "${_pkgname}" "${vcsnames[@]}" "${_pkgbase}-debug" || return 1
+	# read variables from the PKGBUILD
+	local output vcsver vcsnames=()
+	mapfile -t output < <(source_pkgbuild "${_pkgbase}" "${_pkgver}"; \
+						  get_full_version;
+						  echo "${pkgname[@]}")
+	if ! wait $!; then
+		error "failed to source PKGBUILD for %s version %s" "${_pkgbase}" "${_pkgver}"
+	fi
+	vcsver="${output[0]}"
+	if ! read -ra vcsnames <<<"${output[@]:1}"; then
+		error "failed to read pkgname array for %s version %s" "${_pkgbase}" "${_pkgver}"
+		return 1
+	fi
+
+	# check if the VCS pkgver equals the package file pkgver
+	if [[ "${vcsver}" != "${_pkgver}" ]]; then
+		error "VCS pkgver %s does not equal package pkgver %s" "${vcsver}" "${_pkgver}"
+		return 1
+	fi
+
+	# check if the package file pkgname is among the VCS pkgnames
+	if ! in_array "${_pkgname}" "${vcsnames[@]}" "${_pkgbase}-debug"; then
+		error "unknown pkgname '%s' in PKGBUILD for %s version %s" "${_pkgbase}" "${_pkgver}"
+		return 1
+	fi
 
 	return 0
 }
