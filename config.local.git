@@ -68,3 +68,4 @@ GIT_STATE_REPO="/srv/repos/state"
 GITUSER=""
 
 GIT_PACKAGES_CACHE="/srv/repos/pkg-cache"
+LOCK_DIR="/srv/repos/lock"

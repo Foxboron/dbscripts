@@ -66,15 +66,27 @@ fetch_pkgbuild() {
 	# avoid git operations asking for terminal input
 	export GIT_TERMINAL_PROMPT=0
 
+	# double checked locking for fresh clones
 	if [[ ! -d $target ]]; then
-		if ! arch_git -c core.sharedRepository=group clone --origin origin --bare --mirror "${src}" "${target}"; then
-			return 1
+		lock 8 "${LOCK_DIR}/repo-clone-${pkgbase}.lock" "Locking git clone for ${pkgbase}"
+		if [[ ! -d $target ]]; then
+			if ! arch_git -c core.sharedRepository=group clone --origin origin --bare --mirror "${src}" "${target}"; then
+				lock_close 8
+				return 1
+			fi
+			lock_close 8
+			return 0
 		fi
-		return 0
+		lock_close 8
 	fi
+
+	lock 8 "${target}/.git/dbscripts.lock" "Locking git repo ${pkgbase}"
 	if ! arch_git -C "${target}" fetch --prune --prune-tags; then
+		lock_close 8
 		return 1
 	fi
+	lock_close 8
+
 	return 0
 }
 

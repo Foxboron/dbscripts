@@ -205,6 +205,7 @@ setup() {
 	GIT_PACKAGING_REPOS_URL="${TMP}/git-packages"
 	GIT_STATE_REPO="${TMP}/repository"
 	GIT_PACKAGES_CACHE="${TMP}/git-pkg-repos"
+	LOCK_DIR="${TMP}/lock"
 	GITUSER=""
 	AUTHORS="${TMP}/authors.conf"
 	PACKAGER_DOMAIN=localhost
