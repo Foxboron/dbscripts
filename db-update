@@ -19,6 +19,8 @@ if ! check_author; then
 fi
 
 # collect currently staged packages
+username=$(/usr/bin/id -un)
+lock "${LOCK_DIR}/staging-${username}.lock" "Locking staging area for ${username}"
 mapfile -t staging_pkgfiles < <(getpkgfiles "${STAGING}"/**/*${PKGEXTS})
 wait $!
 

@@ -58,7 +58,8 @@ gitlab_project_name_to_path() {
 # Fetch the package sources into a global cache
 fetch_pkgbuild() {
 	local pkgbase="${1}"
-	local project_path src target
+	local project_path src target lock_file
+
 	project_path=$(gitlab_project_name_to_path "${pkgbase}")
 	src="${GIT_PACKAGING_REPOS_URL}/${project_path}.git"
 	target="${GIT_PACKAGES_CACHE}/${pkgbase}"
@@ -68,24 +69,26 @@ fetch_pkgbuild() {
 
 	# double checked locking for fresh clones
 	if [[ ! -d $target ]]; then
-		lock 8 "${LOCK_DIR}/repo-clone-${pkgbase}.lock" "Locking git clone for ${pkgbase}"
+		lock_file="${LOCK_DIR}/clone-${pkgbase}.lock"
+		lock "${lock_file}" "Locking git clone for ${pkgbase}"
 		if [[ ! -d $target ]]; then
 			if ! arch_git -c core.sharedRepository=group clone --origin origin --bare --mirror "${src}" "${target}"; then
-				lock_close 8
+				unlock "${lock_file}"
 				return 1
 			fi
-			lock_close 8
+			unlock "${lock_file}"
 			return 0
 		fi
-		lock_close 8
+		unlock "${lock_file}"
 	fi
 
-	lock 8 "${target}/.git/dbscripts.lock" "Locking git repo ${pkgbase}"
+	lock_file="${target}/.git/dbscripts.lock"
+	lock "${lock_file}" "Locking git repo ${pkgbase}"
 	if ! arch_git -C "${target}" fetch --prune --prune-tags; then
-		lock_close 8
+		unlock "${lock_file}"
 		return 1
 	fi
-	lock_close 8
+	unlock "${lock_file}"
 
 	return 0
 }
@@ -214,9 +217,12 @@ vcs_update_package() {
 	local pkgver="$2"
 	local dest="$3"
 	local gittag
+	local lock_file
+
 	gittag="$(gittag_from_pkgver "${pkgver}")"
 
-	lock 8 "${GIT_STATE_REPO}/.git/dbscripts.lock" "Locking state repo"
+	lock_file="${GIT_STATE_REPO}/.git/dbscripts.lock"
+	lock "${lock_file}" "Locking state repo"
 
 	mkdir -p "${GIT_STATE_REPO}/${dest}"
 	printf '%s %s %s %s\n' \
@@ -229,7 +235,7 @@ vcs_update_package() {
 	arch_git -C "${GIT_STATE_REPO}" add "${GIT_STATE_REPO}/${dest}/${pkgbase}"
 	vcs_commit "update ${pkgbase} to ${pkgver} in ${dest}"
 
-	lock_close 8
+	unlock "${lock_file}"
 }
 
 # Write to the VCS in order to track a package moving between different pacman
@@ -238,14 +244,16 @@ vcs_move_package() {
 	local pkgbase=${1}
 	local vcsrepo_from=${2}
 	local vcsrepo_to=${3}
+	local lock_file
 
-	lock 8 "${GIT_STATE_REPO}/.git/dbscripts.lock" "Locking state repo"
+	lock_file="${GIT_STATE_REPO}/.git/dbscripts.lock"
+	lock "${lock_file}" "Locking state repo"
 
 	mkdir -p "${GIT_STATE_REPO}/${vcsrepo_to}"
 	arch_git -C "${GIT_STATE_REPO}" mv --force "${vcsrepo_from}/${pkgbase}" "${vcsrepo_to}/${pkgbase}"
 	vcs_commit "move ${pkgbase} from ${vcsrepo_from} to ${vcsrepo_to}"
 
-	lock_close 8
+	unlock "${lock_file}"
 }
 
 # Write to the VCS in order to track a package being deleted from a pacman
@@ -253,11 +261,13 @@ vcs_move_package() {
 vcs_remove_package() {
 	local pkgbase=${1}
 	local vcsrepo=${2}
+	local lock_file
 
-	lock 8 "${GIT_STATE_REPO}/.git/dbscripts.lock" "Locking state repo"
+	lock_file="${GIT_STATE_REPO}/.git/dbscripts.lock"
+	lock "${lock_file}" "Locking state repo"
 
 	arch_git -C "${GIT_STATE_REPO}" rm "${vcsrepo}/${pkgbase}"
 	vcs_commit "remove ${pkgbase} from ${vcsrepo}"
 
-	lock_close 8
+	unlock "${lock_file}"
 }

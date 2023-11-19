@@ -87,9 +87,9 @@ lock() {
 }
 
 ##
-#  usage : lock_close( $fd )
+#  usage : unlock( $fd )
 ##
-lock_close() {
+unlock() {
 	local fd=$1
 	# https://github.com/koalaman/shellcheck/issues/862
 	# shellcheck disable=2034
@@ -110,7 +110,7 @@ __buildPackage() {
 		lock 9 "${cache}/.lock"
 
 		if cp -Lv ${cache}/*${PKGEXT}{,.sig} ${pkgdest} 2>/dev/null; then
-			lock_close 9
+			unlock 9
 			return 0
 		fi
 	fi
@@ -138,7 +138,7 @@ __buildPackage() {
 			cp -Lv ${p}{,.sig} ${cache}/
 		fi
 	done
-	lock_close 9
+	unlock 9
 }
 
 __archrelease() {

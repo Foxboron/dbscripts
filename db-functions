@@ -9,17 +9,6 @@ shopt -s extglob globstar nullglob
 # Some PKGBUILDs need CARCH to be set
 CARCH="x86_64"
 
-# Useful functions
-UMASK=""
-set_umask () {
-	export UMASK="${UMASK:-$(umask)}"
-	umask 002
-}
-
-restore_umask () {
-	umask "$UMASK" >/dev/null
-}
-
 # Proxy function to check if a file exists. Using [[ -f ... ]] directly is not
 # always wanted because we might want to expand bash globs first. This way we
 # can pass unquoted globs to is_globfile() and have them expanded as function
@@ -39,56 +28,15 @@ mv_acl() {
 
 # set up general environment
 WORKDIR=$(mktemp -dt "${0##*/}.XXXXXXXXXX")
-LOCKS=()
 REPO_MODIFIED=0
 
 # set static gnupg directory for trusted keyring used by GnuPG, Git etc.
 export GNUPGHOME="${KEYRING}"
 
-script_lock() {
-	local LOCKDIR="$TMPDIR/.scriptlock.${0##*/}"
-	if ! mkdir "$LOCKDIR" >/dev/null 2>&1 ; then
-		local _owner="$(/usr/bin/stat -c %U "$LOCKDIR")"
-		error "Script %s is already locked by %s." "${0##*/}" "$_owner"
-		exit 1
-	else
-		set_umask
-		return 0
-	fi
-}
-
-script_unlock() {
-	local LOCKDIR="$TMPDIR/.scriptlock.${0##*/}"
-	if [[ ! -d $LOCKDIR ]]; then
-		warning "Script %s was not locked!" "${0##*/}"
-		restore_umask
-		return 1
-	else
-		rmdir "$LOCKDIR"
-		restore_umask
-		return 0
-	fi
-}
-
 cleanup() {
 	local status=${1:-$?}
-	local l
-	local repo
-	local arch
 
 	trap - EXIT INT QUIT TERM
-	for l in "${LOCKS[@]}"; do
-		repo=${l%.*}
-		arch=${l#*.}
-		if [[ -d $TMPDIR/.repolock.$repo.$arch ]]; then
-			msg "Removing left over lock from [%s] (%s)" "$repo" "$arch"
-			repo_unlock "$repo" "$arch"
-		fi
-	done
-	if [[ -d $TMPDIR/.scriptlock.${0##*/} ]]; then
-		msg "Removing left over lock from %s" "${0##*/}"
-		script_unlock
-	fi
 	rm -rf "$WORKDIR"
 
 	if (( REPO_MODIFIED )); then
@@ -123,120 +71,123 @@ stat_done() {
 	printf "${BOLD}done${ALL_OFF}\n" >&2
 }
 
+declare -A lockfd=()
+readonly lockfd_start=20
+if [[ -z "${LOCK_DIR}" ]]; then
+	die "No configuration provided where to store locks in LOCK_DIR"
+fi
+
+acquire_fd() {
+	local handle="${1}"
+	local last key next fd
+
+	# check if already acquired
+	if [[ "${lockfd["${handle}"]+exists}" ]]; then
+		echo "${lockfd["${handle}"]}"
+		return
+	fi
+
+	# determine last used fd
+	last=${lockfd_start}
+	for key in "${!lockfd[@]}"; do
+		fd="${lockfd[${key}]}"
+		if (( fd > last )); then
+			last=${fd}
+		fi
+	done
+
+	# assign next fd
+	next=$(( last + 1 ))
+	lockfd["${handle}"]=${next}
+	echo "${next}"
+}
+
 ##
-#  usage : lock( $fd, $file, $message, [ $message_arguments... ] )
+#  usage : acquire_lock( $lock_mode, $file, $message, [ $message_arguments... ] )
+##
+acquire_lock() {
+	local lock_mode=$1
+	local handle=$2
+	local fd
+
+	# acquire fd from handle
+	fd=$(acquire_fd "${handle}")
+
+	# Only reopen the FD if it wasn't handed to us
+	if ! [[ "/dev/fd/${fd}" -ef "${handle}" ]]; then
+		mkdir -p -- "$(dirname -- "${handle}")"
+		eval "exec ${fd}>"'"${handle}"'
+	fi
+
+	if ! flock "${lock_mode}" --nonblock "${fd}"; then
+		stat_busy "${@:3}"
+		flock "${lock_mode}" "${fd}"
+		stat_done
+	fi
+}
+
+##
+#  usage : lock( $file, $message, [ $message_arguments... ] )
 ##
 lock() {
-	# Only reopen the FD if it wasn't handed to us
-	if ! [[ "/dev/fd/$1" -ef "$2" ]]; then
-		mkdir -p -- "$(dirname -- "$2")"
-		eval "exec $1>"'"$2"'
-	fi
-
-	if ! flock -n "$1"; then
-		stat_busy "${@:3}"
-		flock "$1"
-		stat_done
-	fi
+	local handle=$1
+	acquire_lock --exclusive "${handle}" "${@:2}"
 }
 
 ##
-#  usage : slock( $fd, $file, $message, [ $message_arguments... ] )
+#  usage : read_lock( $file, $message, [ $message_arguments... ] )
 ##
-slock() {
-	# Only reopen the FD if it wasn't handed to us
-	if ! [[ "/dev/fd/$1" -ef "$2" ]]; then
-		mkdir -p -- "$(dirname -- "$2")"
-		eval "exec $1>"'"$2"'
-	fi
-
-	if ! flock -sn "$1"; then
-		stat_busy "${@:3}"
-		flock -s "$1"
-		stat_done
-	fi
+read_lock() {
+	local handle=$1
+	acquire_lock --shared "${handle}" "${@:2}"
 }
 
 ##
-#  usage : lock_close( $fd )
+#  usage : unlock( $file )
 ##
-lock_close() {
-	local fd=$1
+unlock() {
+	local handle=$1
+	local fd
+
+	# acquire fd from handle
+	fd=$(acquire_fd "${handle}")
+
+	# close fd and release lock
 	# https://github.com/koalaman/shellcheck/issues/862
 	# shellcheck disable=2034
 	exec {fd}>&-
 }
 
-#repo_lock <repo-name> <arch> [timeout]
+#repo_lock <repo-name> <arch>
 repo_lock() {
-	local repo base=${1}; shift
+	local base="${1}"
+	local arch="${2}"
+	local repo
+
 	for repo in ${base} ${base}-debug; do
-		_repo_lock ${repo} "${@}" || exit 1
+		lock "${LOCK_DIR}/repo-${repo}-${arch}.lock" "Locking repository %s (%s)" "${repo}" "${arch}"
 	done
-}
-
-_repo_lock () {
-	local LOCKDIR="$TMPDIR/.repolock.$1.$2"
-	local DBLOCKFILE="${FTP_BASE}/${1}/os/${2}/${1}${DBEXT}.lck"
-	local _count
-	local _trial
-	local _timeout
-	local _lockblock
-	local _owner
-
-	# This is the lock file used by repo-add and repo-remove
-	if [[ -f ${DBLOCKFILE} ]]; then
-		error "Repo [%s] (%s) is already locked by repo-{add,remove} process %s" "$1" "$2" "$(cat "$DBLOCKFILE")"
-		return 1
-	fi
-
-	if (( $# == 2 )); then
-		_lockblock=true
-		_trial=0
-	elif (( $# == 3 )); then
-		_lockblock=false
-		_timeout=$3
-		let _trial=$_timeout/$LOCK_DELAY
-	fi
-
-	_count=0
-	while (( _count <= _trial )) || [[ $_lockblock = true ]]; do
-		if ! mkdir "$LOCKDIR" >/dev/null 2>&1 ; then
-			_owner="$(/usr/bin/stat -c %U "$LOCKDIR")"
-			warning "Repo [%s] (%s) is already locked by %s." "$1" "$2" "$_owner"
-			msg2 "Retrying in %s seconds..." "$LOCK_DELAY"
-		else
-			LOCKS+=("$1.$2")
-			set_umask
-			return 0
-		fi
-		sleep "$LOCK_DELAY"
-		let _count=$_count+1
-	done
-
-	error "Repo [%s] (%s) is already locked by %s. Giving up!" "$1" "$2" "$_owner"
-	return 1
 }
 
 #repo_unlock <repo-name> <arch>
-repo_unlock () {
-	local repo base=${1}; shift
+repo_unlock() {
+	local base="${1}"
+	local arch="${2}"
+	local repo
+
 	for repo in ${base} ${base}-debug; do
-		_repo_unlock ${repo} "${@}"
+		unlock "${LOCK_DIR}/repo-${repo}-${arch}.lock"
 	done
 }
 
-_repo_unlock () {
-	local LOCKDIR="$TMPDIR/.repolock.$1.$2"
-	if [[ ! -d $LOCKDIR ]]; then
-		warning "Repo lock [%s] (%s) was not locked!" "$1" "$2"
-		restore_umask
-		return 1
-	else
-		rmdir "$LOCKDIR"
-		restore_umask
-		return 0
-	fi
+script_lock() {
+	local script_name=${0##*/}
+	lock "${LOCK_DIR}/script-${script_name}.lock" "Locking script %s" "${script_name}"
+}
+
+script_unlock() {
+	local script_name=${0##*/}
+	unlock "${LOCK_DIR}/script-${script_name}.lock"
 }
 
 # usage: _grep_all_info pkgfile infofile key

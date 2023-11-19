@@ -30,8 +30,6 @@ SOURCE_CLEANUP_DRYRUN=false
 # Time in days to keep moved sourcepackages
 SOURCE_CLEANUP_KEEP=14
 
-LOCK_DELAY=10
-LOCK_TIMEOUT=300
 LOCK_DIR="/var/tmp"
 
 STAGING="$HOME/staging"
@@ -63,3 +61,5 @@ PACKAGER_DOMAIN=archlinux.org
 # Override default config with config.local
 LOCAL_CONFIG=${DBSCRIPTS_CONFIG:-"$(dirname "${BASH_SOURCE[0]}")/config.local"}
 [[ -f "${LOCAL_CONFIG}" ]] && . "${LOCAL_CONFIG}"
+
+umask 002
