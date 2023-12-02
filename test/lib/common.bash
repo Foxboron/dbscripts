@@ -3,15 +3,6 @@ shopt -s extglob
 
 bats_require_minimum_version 1.5.0
 
-# Copy of db-functions-git
-arch_git() {
-	if [[ -z ${GITUSER} ]]; then
-		/usr/bin/git "${@}"
-	else
-		sudo -u "${GITUSER}" -- /usr/bin/git "${@}"
-	fi
-}
-
 __updatePKGBUILD() {
 	local pkgrel
 
@@ -204,7 +195,6 @@ setup() {
 	GIT_STATE_REPO="${TMP}/repository"
 	GIT_PACKAGES_CACHE="${TMP}/git-pkg-repos"
 	LOCK_DIR="${TMP}/lock"
-	GITUSER=""
 	AUTHORS="${TMP}/authors.conf"
 	PACKAGER_DOMAIN=localhost
 
@@ -255,7 +245,7 @@ eot
 	git init --bare --shared=group "${TMPDIR}/git-packages-bare.git"
 	mkdir "${GIT_STATE_REPO}"
 	chmod 777 "${GIT_STATE_REPO}"
-	arch_git -c "core.sharedRepository=group" clone "${TMPDIR}/git-packages-bare.git" "${GIT_STATE_REPO}" 2>/dev/null
+	git -c "core.sharedRepository=group" clone "${TMPDIR}/git-packages-bare.git" "${GIT_STATE_REPO}" 2>/dev/null
 }
 
 teardown() {

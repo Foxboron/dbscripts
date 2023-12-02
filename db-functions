@@ -9,6 +9,21 @@ shopt -s extglob globstar nullglob
 # Some PKGBUILDs need CARCH to be set
 CARCH="x86_64"
 
+# set up general environment
+WORKDIR=$(mktemp -dt "${0##*/}.XXXXXXXXXX")
+REPO_MODIFIED=0
+
+# set static gnupg directory for trusted keyring used by GnuPG, Git etc.
+export GNUPGHOME="${KEYRING}"
+
+# unset any behavior influencing environment variables
+# https://git-scm.com/book/en/v2/Git-Internals-Environment-Variables
+while read -r var; do
+	unset "${var}";
+done < <(env | grep -E '^GIT' | awk -F= '{print $1}')
+unset PREFIX
+unset EMAIL
+
 # Proxy function to check if a file exists. Using [[ -f ... ]] directly is not
 # always wanted because we might want to expand bash globs first. This way we
 # can pass unquoted globs to is_globfile() and have them expanded as function
@@ -25,13 +40,6 @@ mv_acl() {
 	cat "$1" >"$2" || return 1
 	rm -f "$1"
 }
-
-# set up general environment
-WORKDIR=$(mktemp -dt "${0##*/}.XXXXXXXXXX")
-REPO_MODIFIED=0
-
-# set static gnupg directory for trusted keyring used by GnuPG, Git etc.
-export GNUPGHOME="${KEYRING}"
 
 cleanup() {
 	local status=${1:-$?}
@@ -1003,21 +1011,6 @@ function array_append() {
 }
 
 
-if [[ -n ${GITUSER} ]]; then
-	setfacl -m u:"${GITUSER}":rwx "${WORKDIR}"
-	setfacl -m d:u:"${USER}":rwx "${WORKDIR}"
-	setfacl -m d:u:"${GITUSER}":rwx "${WORKDIR}"
-fi
-
-# unset any behavior influencing environment variables
-# https://git-scm.com/book/en/v2/Git-Internals-Environment-Variables
-while read -r var; do
-	unset "${var}";
-done < <(env | grep -E '^GIT' | awk -F= '{print $1}')
-unset PREFIX
-unset EMAIL
-
-
 # Converts from the PKGBUILD tag to the git repository tag
 # Input     1:1.0~0-1
 # Output    1-1.0.0-1
@@ -1027,14 +1020,6 @@ gittag_from_pkgver() {
 	gittag="${pkgver/:/-}"
 	gittag="${gittag//\~/.}"
 	printf "%s" "${gittag}"
-}
-
-arch_git() {
-	if [[ -z ${GITUSER} ]]; then
-		/usr/bin/git "${@}"
-	else
-		sudo -u "${GITUSER}" -- /usr/bin/git "${@}"
-	fi
 }
 
 # Convert arbitrary project names to GitLab valid path names.
@@ -1075,7 +1060,7 @@ fetch_pkgbuild() {
 		lock_file="${LOCK_DIR}/clone-${pkgbase}.lock"
 		lock "${lock_file}" "Locking git clone for ${pkgbase}"
 		if [[ ! -d $target ]]; then
-			if ! arch_git -c core.sharedRepository=group clone --origin origin --bare --mirror "${src}" "${target}"; then
+			if ! git -c core.sharedRepository=group clone --origin origin --bare --mirror "${src}" "${target}"; then
 				unlock "${lock_file}"
 				return 1
 			fi
@@ -1087,7 +1072,7 @@ fetch_pkgbuild() {
 
 	lock_file="${target}/.git/dbscripts.lock"
 	lock "${lock_file}" "Locking git repo ${pkgbase}"
-	if ! arch_git -C "${target}" fetch --prune --prune-tags; then
+	if ! git -C "${target}" fetch --prune --prune-tags; then
 		unlock "${lock_file}"
 		return 1
 	fi
@@ -1115,12 +1100,12 @@ git_tag_exists() {
 }
 
 
-# Source the PKGBUILD from the package's git/svn/whatever repo.
+# Source the PKGBUILD from the package's git repo.
 source_pkgbuild() {
 	local pkgbase="$1"
 	local tag=$(gittag_from_pkgver "${2}")
 
-	. <(arch_git -C "${GIT_PACKAGES_CACHE}/${pkgbase}" show "${tag}":PKGBUILD 2>/dev/null || echo false)
+	. <(git -C "${GIT_PACKAGES_CACHE}/${pkgbase}" show "${tag}":PKGBUILD 2>/dev/null || echo false)
 }
 
 # Export PKGBUILD resource following the same rules as source_pkgbuild()
@@ -1131,7 +1116,7 @@ export_from_vcs() {
 
 	if [[ ! -e ${dest} ]]; then
 		mkdir -p "${dest}"
-		arch_git -C "${GIT_PACKAGES_CACHE}/${pkgbase}" archive "$tag" | bsdtar -xf - -C "${dest}"
+		git -C "${GIT_PACKAGES_CACHE}/${pkgbase}" archive "$tag" | bsdtar -xf - -C "${dest}"
 	fi
 }
 
@@ -1141,7 +1126,7 @@ find_repo_for_package() {
 	local pkgarch=${2}
 	local candidates=("${@:3}")
 
-	local repos=($(arch_git -C "${GIT_STATE_REPO}" ls-files "*/$pkgbase" | \
+	local repos=($(git -C "${GIT_STATE_REPO}" ls-files "*/$pkgbase" | \
 		awk -F/ '{print $1}' | \
 		grep --line-regexp --fixed-strings --file \
 			<(printf "%s\n" "${candidates[@]/%/-${pkgarch}}" "${candidates[@]/%/-any}")))
@@ -1205,7 +1190,7 @@ vcs_commit() {
 	unset GIT_AUTHOR_DATE
 	unset GIT_COMMITTER_DATE
 
-	arch_git \
+	git \
 		-c user.name="${name}" \
 		-c user.email="${email}" \
 		-C "${GIT_STATE_REPO}" \
@@ -1235,7 +1220,7 @@ vcs_update_package() {
 		"$(git -C "${GIT_PACKAGES_CACHE}/${pkgbase}" rev-parse "${gittag}")" \
 		> "${GIT_STATE_REPO}/${dest}/${pkgbase}"
 
-	arch_git -C "${GIT_STATE_REPO}" add "${GIT_STATE_REPO}/${dest}/${pkgbase}"
+	git -C "${GIT_STATE_REPO}" add "${GIT_STATE_REPO}/${dest}/${pkgbase}"
 	vcs_commit "update ${pkgbase} to ${pkgver} in ${dest}"
 
 	unlock "${lock_file}"
@@ -1253,7 +1238,7 @@ vcs_move_package() {
 	lock "${lock_file}" "Locking state repo"
 
 	mkdir -p "${GIT_STATE_REPO}/${vcsrepo_to}"
-	arch_git -C "${GIT_STATE_REPO}" mv --force "${vcsrepo_from}/${pkgbase}" "${vcsrepo_to}/${pkgbase}"
+	git -C "${GIT_STATE_REPO}" mv --force "${vcsrepo_from}/${pkgbase}" "${vcsrepo_to}/${pkgbase}"
 	vcs_commit "move ${pkgbase} from ${vcsrepo_from} to ${vcsrepo_to}"
 
 	unlock "${lock_file}"
@@ -1269,7 +1254,7 @@ vcs_remove_package() {
 	lock_file="${GIT_STATE_REPO}/.git/dbscripts.lock"
 	lock "${lock_file}" "Locking state repo"
 
-	arch_git -C "${GIT_STATE_REPO}" rm "${vcsrepo}/${pkgbase}"
+	git -C "${GIT_STATE_REPO}" rm "${vcsrepo}/${pkgbase}"
 	vcs_commit "remove ${pkgbase} from ${vcsrepo}"
 
 	unlock "${lock_file}"
