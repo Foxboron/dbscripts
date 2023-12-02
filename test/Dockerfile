@@ -72,6 +72,8 @@ Expire-Date: 0\n\
 | gpg --quiet --batch --no-tty --no-permission-warning --gen-key && \
 	gpg --export | sudo pacman-key -a - && \
 	sudo pacman-key --lsign-key tester@localhost && \
+	gpgconf --kill gpg-agent && \
+	gpgconf --kill keyboxd && \
 	mkdir -p \
 		/build/staging/{{core,extra,multilib}{,-testing,-staging},gnome-unstable} && \
 	git config --global user.email "tester@localhost" && \
