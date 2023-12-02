@@ -131,8 +131,7 @@ __buildPackage() {
 	done
 
 	for p in ${pkgfiles[@]}; do
-		# Manually sign packages as "makepkg --sign" is buggy
-		gpg -v --detach-sign --no-armor --use-agent ${p}
+		sq sign --detached --binary --signer-file /build/private.key --output "${p}.sig" "${p}"
 
 		if [[ -n ${BUILDDIR} ]]; then
 			cp -Lv ${p}{,.sig} ${cache}/

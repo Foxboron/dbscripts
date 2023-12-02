@@ -14,7 +14,8 @@ RUN pacman -Syu --noconfirm --needed \
 		binutils \
 		git \
 		parallel \
-		coreutils
+		coreutils \
+		sequoia-sq
 
 RUN pacman-key --init && \
 	echo '%wheel ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/wheel && \
@@ -60,18 +61,10 @@ RUN sed 's/libexec/lib/g' -i /usr/lib/bats/* && \
 
 USER tester
 
-RUN echo -e "\
-Key-Type: RSA\n\
-Key-Length: 1024\n\
-Key-Usage: sign\n\
-Name-Real: Bob Tester\n\
-Name-Email: tester@localhost\n\
-Expire-Date: 0\n\
-%no-protection\n\
-%commit\n"\
-| gpg --quiet --batch --no-tty --no-permission-warning --gen-key && \
-	gpg --export | sudo pacman-key -a - && \
+RUN sq key generate --userid "Bob Tester <tester@localhost>" --output /build/private.key && \
+	sq export --keyring /build/private.key | sudo pacman-key -a - && \
 	sudo pacman-key --lsign-key tester@localhost && \
+	gpg --import /build/private.key && \
 	gpgconf --kill gpg-agent && \
 	gpgconf --kill keyboxd && \
 	mkdir -p \
