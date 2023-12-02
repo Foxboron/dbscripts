@@ -98,7 +98,7 @@ for repo in "${!staging[@]}"; do
 			die "Package %s was not built with the checked in PKGBUILD" "$repo/${pkg##*/}"
 		fi
 		if ! check_pkgvcs "${pkg}" "${repo}"; then
-			die "Package %s is not consistent with %s repository" "$repo/${pkg##*/}" "${VCS}"
+			die "Package %s is not consistent with data in git repository" "$repo/${pkg##*/}"
 		fi
 	done
 done

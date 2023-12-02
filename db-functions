@@ -499,7 +499,7 @@ check_pkgvcs() {
 
 	# check if the VCS pkgver equals the package file pkgver
 	if [[ "${vcsver}" != "${_pkgver}" ]]; then
-		error "VCS pkgver %s does not equal package pkgver %s" "${vcsver}" "${_pkgver}"
+		error "PKGBUILD pkgver %s does not equal package pkgver %s" "${vcsver}" "${_pkgver}"
 		return 1
 	fi
 
@@ -1003,4 +1003,274 @@ function array_append() {
 }
 
 
-. "$(dirname "$(readlink -e "${BASH_SOURCE[0]}")")/db-functions-${VCS}"
+if [[ -n ${GITUSER} ]]; then
+	setfacl -m u:"${GITUSER}":rwx "${WORKDIR}"
+	setfacl -m d:u:"${USER}":rwx "${WORKDIR}"
+	setfacl -m d:u:"${GITUSER}":rwx "${WORKDIR}"
+fi
+
+# unset any behavior influencing environment variables
+# https://git-scm.com/book/en/v2/Git-Internals-Environment-Variables
+while read -r var; do
+	unset "${var}";
+done < <(env | grep -E '^GIT' | awk -F= '{print $1}')
+unset PREFIX
+unset EMAIL
+
+
+# Converts from the PKGBUILD tag to the git repository tag
+# Input     1:1.0~0-1
+# Output    1-1.0.0-1
+gittag_from_pkgver() {
+	local pkgver="$1"
+	local gittag
+	gittag="${pkgver/:/-}"
+	gittag="${gittag//\~/.}"
+	printf "%s" "${gittag}"
+}
+
+arch_git() {
+	if [[ -z ${GITUSER} ]]; then
+		/usr/bin/git "${@}"
+	else
+		sudo -u "${GITUSER}" -- /usr/bin/git "${@}"
+	fi
+}
+
+# Convert arbitrary project names to GitLab valid path names.
+#
+# GitLab has several limitations on project and group names and also maintains
+# a list of reserved keywords as documented on their docs.
+# https://docs.gitlab.com/ee/user/reserved_names.html
+#
+# 1. replace single '+' between word boundaries with '-'
+# 2. replace any other '+' with literal 'plus'
+# 3. replace any special chars other than '_', '-' and '.' with '-'
+# 4. replace consecutive '_-' chars with a single '-'
+# 5. replace 'tree' with 'unix-tree' due to GitLab reserved keyword
+gitlab_project_name_to_path() {
+	local name=$1
+	printf "%s" "${name}" \
+		| sed -E 's/([a-zA-Z0-9]+)\+([a-zA-Z]+)/\1-\2/g' \
+		| sed -E 's/\+/plus/g' \
+		| sed -E 's/[^a-zA-Z0-9_\-\.]/-/g' \
+		| sed -E 's/[_\-]{2,}/-/g' \
+		| sed -E 's/^tree$/unix-tree/g'
+}
+
+# Fetch the package sources into a global cache
+fetch_pkgbuild() {
+	local pkgbase="${1}"
+	local project_path src target lock_file
+
+	project_path=$(gitlab_project_name_to_path "${pkgbase}")
+	src="${GIT_PACKAGING_REPOS_URL}/${project_path}.git"
+	target="${GIT_PACKAGES_CACHE}/${pkgbase}"
+
+	# avoid git operations asking for terminal input
+	export GIT_TERMINAL_PROMPT=0
+
+	# double checked locking for fresh clones
+	if [[ ! -d $target ]]; then
+		lock_file="${LOCK_DIR}/clone-${pkgbase}.lock"
+		lock "${lock_file}" "Locking git clone for ${pkgbase}"
+		if [[ ! -d $target ]]; then
+			if ! arch_git -c core.sharedRepository=group clone --origin origin --bare --mirror "${src}" "${target}"; then
+				unlock "${lock_file}"
+				return 1
+			fi
+			unlock "${lock_file}"
+			return 0
+		fi
+		unlock "${lock_file}"
+	fi
+
+	lock_file="${target}/.git/dbscripts.lock"
+	lock "${lock_file}" "Locking git repo ${pkgbase}"
+	if ! arch_git -C "${target}" fetch --prune --prune-tags; then
+		unlock "${lock_file}"
+		return 1
+	fi
+	unlock "${lock_file}"
+
+	return 0
+}
+
+git_tag_exists() {
+	local pkgbase="$1"
+	local tag="$2"
+	local path="${GIT_PACKAGES_CACHE}/${pkgbase}"
+
+	tag=$(gittag_from_pkgver "${tag}")
+
+	if [[ ! -d "${path}" ]]; then
+		return 1
+	fi
+
+	if ! git -C "${path}" rev-parse --quiet --verify --end-of-options "${tag}^{tag}" -- &>/dev/null; then
+		return 1
+	fi
+
+	return 0
+}
+
+
+# Source the PKGBUILD from the package's git/svn/whatever repo.
+source_pkgbuild() {
+	local pkgbase="$1"
+	local tag=$(gittag_from_pkgver "${2}")
+
+	. <(arch_git -C "${GIT_PACKAGES_CACHE}/${pkgbase}" show "${tag}":PKGBUILD 2>/dev/null || echo false)
+}
+
+# Export PKGBUILD resource following the same rules as source_pkgbuild()
+export_from_vcs() {
+	local pkgbase="$1"
+	local tag=$(gittag_from_pkgver "${2}")
+	local dest="$3"
+
+	if [[ ! -e ${dest} ]]; then
+		mkdir -p "${dest}"
+		arch_git -C "${GIT_PACKAGES_CACHE}/${pkgbase}" archive "$tag" | bsdtar -xf - -C "${dest}"
+	fi
+}
+
+# Which repo is this package in?
+find_repo_for_package() {
+	local pkgbase=${1}
+	local pkgarch=${2}
+	local candidates=("${@:3}")
+
+	local repos=($(arch_git -C "${GIT_STATE_REPO}" ls-files "*/$pkgbase" | \
+		awk -F/ '{print $1}' | \
+		grep --line-regexp --fixed-strings --file \
+			<(printf "%s\n" "${candidates[@]/%/-${pkgarch}}" "${candidates[@]/%/-any}")))
+
+	if (( ${#repos[@]} > 1 )); then
+		die "%s is present in multiple repos (%s)" "${pkgbase}" "${repos[*]}"
+	fi
+	(( ${#repos[@]} == 1 )) || return $?
+
+	printf '%s\n' "${repos[@]%/}"
+}
+
+# Get the current pkgver from a given repo
+pkgver_from_state_repo() {
+	local pkgbase=${1}
+	local repo=${2}
+	property_from_state_repo "${pkgbase}" "${repo}" 2
+}
+
+# Get the current git tag name from a given repo
+gittag_from_state_repo() {
+	local pkgbase=${1}
+	local repo=${2}
+	property_from_state_repo "${pkgbase}" "${repo}" 3
+}
+
+# Get the given property position from a given repo
+property_from_state_repo() {
+	local pkgbase=${1}
+	local repo=${2}
+	local prop=${3}
+	awk '{print $'"${prop}"'}' "${GIT_STATE_REPO}/${repo}/${pkgbase}" 2>/dev/null || return 1
+}
+
+# Commit changes staged by (successive?) vcs_(re)?move_package runs.
+#
+# Caller contract:
+# - Requires the caller to hold a lock for the transaction on fd 8 "${GIT_STATE_REPO}/.git/dbscripts.lock"
+vcs_commit() {
+	local commit_message=$1
+	local username author name email
+
+	if ! username=$(/usr/bin/id -un); then
+		die "Failed to get username from 'id'"
+	fi
+	if ! author=$(grep -E " ${username}\$" "${AUTHORS}"); then
+		die "Missing author information for %s in '%s'" "${username}" "${AUTHORS}"
+	fi
+	if ! name=$(echo "${author}"|sed -E 's/(.+) (<.+>) .+/\1/'); then
+		die "Failed to extract name from author line"
+	fi
+	if ! email=$(echo "${author}"|sed -E 's/(.+) (<.+>) .+/\2/'); then
+		die "Failed to extract email from author line"
+	fi
+
+	export GIT_AUTHOR_NAME="${name}"
+	export GIT_AUTHOR_EMAIL="${email}"
+	export GIT_COMMITTER_NAME="${GIT_AUTHOR_NAME}"
+	export GIT_COMMITTER_EMAIL=${GIT_AUTHOR_EMAIL}
+
+	unset GIT_AUTHOR_DATE
+	unset GIT_COMMITTER_DATE
+
+	arch_git \
+		-c user.name="${name}" \
+		-c user.email="${email}" \
+		-C "${GIT_STATE_REPO}" \
+		commit \
+		--no-gpg-sign \
+		--message="${commit_message}"
+}
+
+
+vcs_update_package() {
+	local pkgbase="$1"
+	local pkgver="$2"
+	local dest="$3"
+	local gittag
+	local lock_file
+
+	gittag="$(gittag_from_pkgver "${pkgver}")"
+
+	lock_file="${GIT_STATE_REPO}/.git/dbscripts.lock"
+	lock "${lock_file}" "Locking state repo"
+
+	mkdir -p "${GIT_STATE_REPO}/${dest}"
+	printf '%s %s %s %s\n' \
+		"${pkgbase}" \
+		"${pkgver}" \
+		"${gittag}" \
+		"$(git -C "${GIT_PACKAGES_CACHE}/${pkgbase}" rev-parse "${gittag}")" \
+		> "${GIT_STATE_REPO}/${dest}/${pkgbase}"
+
+	arch_git -C "${GIT_STATE_REPO}" add "${GIT_STATE_REPO}/${dest}/${pkgbase}"
+	vcs_commit "update ${pkgbase} to ${pkgver} in ${dest}"
+
+	unlock "${lock_file}"
+}
+
+# Write to the VCS in order to track a package moving between different pacman
+# repositories.
+vcs_move_package() {
+	local pkgbase=${1}
+	local vcsrepo_from=${2}
+	local vcsrepo_to=${3}
+	local lock_file
+
+	lock_file="${GIT_STATE_REPO}/.git/dbscripts.lock"
+	lock "${lock_file}" "Locking state repo"
+
+	mkdir -p "${GIT_STATE_REPO}/${vcsrepo_to}"
+	arch_git -C "${GIT_STATE_REPO}" mv --force "${vcsrepo_from}/${pkgbase}" "${vcsrepo_to}/${pkgbase}"
+	vcs_commit "move ${pkgbase} from ${vcsrepo_from} to ${vcsrepo_to}"
+
+	unlock "${lock_file}"
+}
+
+# Write to the VCS in order to track a package being deleted from a pacman
+# repository.
+vcs_remove_package() {
+	local pkgbase=${1}
+	local vcsrepo=${2}
+	local lock_file
+
+	lock_file="${GIT_STATE_REPO}/.git/dbscripts.lock"
+	lock "${lock_file}" "Locking state repo"
+
+	arch_git -C "${GIT_STATE_REPO}" rm "${vcsrepo}/${pkgbase}"
+	vcs_commit "remove ${pkgbase} from ${vcsrepo}"
+
+	unlock "${lock_file}"
+}

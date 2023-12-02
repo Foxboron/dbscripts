@@ -15,11 +15,6 @@ STABLE_REPOS=()
 STABILITY_LAYERS=(stable testing staging unstable)
 declare -A ACL=()
 
-# VCS backend
-VCS=svn
-SVNREPO=''
-SVNUSER=''
-
 CLEANUP_DESTDIR="/var/tmp"
 CLEANUP_DRYRUN=false
 # Time in days to keep moved packages

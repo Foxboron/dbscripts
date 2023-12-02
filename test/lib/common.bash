@@ -200,7 +200,6 @@ setup() {
 	ARCHES=(x86_64 i686)
 	CLEANUP_DRYRUN=false
 	SOURCE_CLEANUP_DRYRUN=false
-	VCS=git
 	KEYRING="/etc/pacman.d/gnupg"
 	GIT_PACKAGING_REPOS_URL="${TMP}/git-packages"
 	GIT_STATE_REPO="${TMP}/repository"
