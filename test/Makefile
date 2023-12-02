@@ -10,6 +10,6 @@ test-coverage:
 		--include-path=$(CURDIR)/../ \
 		--exclude-path=$(CURDIR)/../test,$(CURDIR)/../cron-jobs/makepkg.conf,$(CURDIR)/../config \
 		$(COVERAGE_DIR) \
-		bats $(CASES)
+		bats $(BATS_ARGS) $(CASES)
 
 .PHONY: test test-coverage

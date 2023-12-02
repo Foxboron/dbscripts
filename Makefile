@@ -15,7 +15,7 @@ test: test-image
 test-coverage: test-image
 	rm -rf ${PWD}/coverage
 	mkdir -m 777 ${PWD}/coverage
-	$(DOCKER) run  $(RUN_OPTIONS) -v ${PWD}/coverage:/coverage -e COVERAGE_DIR=/coverage $(IMAGE) make test-coverage
+	$(DOCKER) run  $(RUN_OPTIONS) -v ${PWD}/coverage:/coverage -e COVERAGE_DIR=/coverage $(IMAGE) make BATS_ARGS="$(BATS_ARGS)" test-coverage
 
 dev-env: test-image
 	$(DOCKER) run $(RUN_OPTIONS) --tty --interactive $(IMAGE) /bin/bash
