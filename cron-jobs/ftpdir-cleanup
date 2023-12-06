@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -eo pipefail
+
 . "$(dirname "$(readlink -e "$0")")/../config"
 . "$(dirname "$(readlink -e "$0")")/../db-functions"
 
