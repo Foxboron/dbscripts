@@ -15,10 +15,16 @@ test:
 code-coverage:
   script:
     - pacman -Syu --needed --noconfirm podman make jq
-    - make test-coverage 2>/dev/null
-    - "echo \"Percent coverage: $(jq -r .percent_covered coverage/bats.*/coverage.json)%\""
+    - make test-coverage
+    - jq -r '. |
+        ["Percent covered", .percent_covered],
+        ["Covered lines", .covered_lines],
+        ["Total lines", .total_lines],
+        ["Percent low", .percent_low],
+        ["Percent high", .percent_high] | @tsv' coverage/bats.*/coverage.json
   tags:
     - vm
+  coverage: '/Percent covered\s+\d+\.\d+/'
   artifacts:
     reports:
       coverage_report:
