@@ -8,9 +8,12 @@ lint:
 test:
   script:
     - pacman -Syu --needed --noconfirm podman make
-    - make test
+    - make test BATS_EXTRA_ARGS='--formatter junit'
   tags:
     - vm
+  artifacts:
+    reports:
+      junit: coverage/bats-report.xml
 
 code-coverage:
   script:

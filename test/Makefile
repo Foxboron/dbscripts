@@ -1,9 +1,12 @@
+SHELL=/bin/bash -o pipefail
+
 CASES ?= cases
 JOBS ?= $(shell nproc)
 BATS_ARGS ?= --jobs $(JOBS) --verbose-run
+COVERAGE_DIR ?= .
 
 test:
-	BUILDDIR=/build PATH=$(CURDIR)/../:$(CURDIR)/../cron-jobs/:$(PATH) bats $(BATS_ARGS) $(CASES)
+	BUILDDIR=/build PATH=$(CURDIR)/../:$(CURDIR)/../cron-jobs/:$(PATH) bats $(BATS_ARGS) $(CASES) | tee $(COVERAGE_DIR)/bats-report.xml
 
 test-coverage:
 	BUILDDIR=/build PATH=$(CURDIR)/../:$(CURDIR)/../cron-jobs/:$(PATH) kcov \
