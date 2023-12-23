@@ -117,6 +117,7 @@ acquire_lock() {
 	local lock_mode=$1
 	local handle=$2
 	local fd
+	local ret
 
 	# acquire fd from handle
 	fd=$(acquire_fd "${handle}")
@@ -129,7 +130,11 @@ acquire_lock() {
 
 	if ! flock "${lock_mode}" --nonblock "${fd}"; then
 		stat_busy "${@:3}"
-		flock "${lock_mode}" "${fd}"
+		if ! flock "${lock_mode}" "${fd}"; then
+			ret=$?
+			error "failed to lock %s: %s" "${handle}" "${ret}"
+			return ${ret}
+		fi
 		stat_done
 	fi
 }

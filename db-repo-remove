@@ -3,6 +3,11 @@
 . "$(dirname "$(readlink -e "$0")")/config"
 . "$(dirname "$(readlink -e "$0")")/db-functions"
 
+set -eo pipefail
+shopt -s nullglob
+
+colorize
+
 if (( $# < 3 )); then
 	msg "usage: %s <repo> <arch> <pkgname> ..." "${0##*/}"
 	exit 1
@@ -25,7 +30,7 @@ else
 fi
 
 for tarch in "${tarches[@]}"; do
-	repo_lock "$repo" "$tarch" || exit 1
+	repo_lock "$repo" "$tarch"
 done
 
 for tarch in "${tarches[@]}"; do

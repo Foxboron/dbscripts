@@ -3,6 +3,11 @@
 . "$(dirname "$(readlink -e "$0")")/config"
 . "$(dirname "$(readlink -e "$0")")/db-functions"
 
+set -eo pipefail
+shopt -s nullglob
+
+colorize
+
 if (( $# < 1 )); then
 	msg "usage: %s <pkgname|pkgbase> ..." "${0##*/}"
 	exit 1
@@ -12,7 +17,7 @@ fi
 script_lock
 for repo in "${TESTING_REPOS[@]}" "${STABLE_REPOS[@]}"; do
 	for pkgarch in "${ARCHES[@]}"; do
-		repo_lock "${repo}" "${pkgarch}" || exit 1
+		repo_lock "${repo}" "${pkgarch}"
 	done
 done
 

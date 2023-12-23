@@ -1,5 +1,8 @@
 #!/bin/bash
 
+set -eo pipefail
+shopt -s nullglob
+
 dirname="$(dirname "$(readlink -e "$0")")"
 . "${dirname}/../config"
 . "${dirname}/../db-functions"
@@ -9,7 +12,7 @@ script_lock
 
 for repo in "${PKGREPOS[@]}"; do
 	for arch in "${ARCHES[@]}"; do
-		repo_lock "${repo}" "${arch}" || exit 1
+		repo_lock "${repo}" "${arch}"
 	done
 done
 

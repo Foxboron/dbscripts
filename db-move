@@ -47,8 +47,8 @@ fi
 
 # TODO: this might lock too much (architectures)
 for pkgarch in "${ARCHES[@]}"; do
-	repo_lock "${repo_to}" "${pkgarch}" || exit 1
-	repo_lock "${repo_from}" "${pkgarch}" || exit 1
+	repo_lock "${repo_to}" "${pkgarch}"
+	repo_lock "${repo_from}" "${pkgarch}"
 done
 
 # check if packages to be moved exist in version control and ftp dir

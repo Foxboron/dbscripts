@@ -107,7 +107,7 @@ done
 # TODO: this might lock too much (architectures)
 for repo in "${!staging[@]}"; do
 	for pkgarch in "${ARCHES[@]}"; do
-		repo_lock "${repo}" "${pkgarch}" || exit 1
+		repo_lock "${repo}" "${pkgarch}"
 	done
 done
 

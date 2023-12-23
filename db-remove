@@ -98,7 +98,7 @@ fi
 
 # lock repos
 for tarch in "${tarches[@]}"; do
-	repo_lock "$repo" "$tarch" || exit 1
+	repo_lock "$repo" "$tarch"
 done
 
 declare -A remove_pkgbases
