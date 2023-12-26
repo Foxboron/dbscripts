@@ -79,35 +79,36 @@ stat_done() {
 	printf "${BOLD}done${ALL_OFF}\n" >&2
 }
 
-declare -A lockfd=()
-readonly lockfd_start=20
 if [[ -z "${LOCK_DIR}" ]]; then
 	die "No configuration provided where to store locks in LOCK_DIR"
 fi
 
 acquire_fd() {
 	local handle="${1}"
-	local last key next fd
+	local fd fd_handle
 
-	# check if already acquired
-	if [[ "${lockfd["${handle}"]+exists}" ]]; then
-		echo "${lockfd["${handle}"]}"
-		return
-	fi
+	# store the resolved path
+	handle=$(realpath -- "${handle}")
 
-	# determine last used fd
-	last=${lockfd_start}
-	for key in "${!lockfd[@]}"; do
-		fd="${lockfd[${key}]}"
-		if (( fd > last )); then
-			last=${fd}
+	# try to find open fd for handle
+	for fd in /dev/fd/*; do
+		fd_handle=$(realpath -- "${fd}")
+		if [[ ${handle} -ef ${fd_handle} ]]; then
+			fd=$(basename -- "${fd}")
+			printf "%s" "${fd}"
+			return 0
 		fi
 	done
 
-	# assign next fd
-	next=$(( last + 1 ))
-	lockfd["${handle}"]=${next}
-	echo "${next}"
+	# return first unused fd
+	for fd in $(seq 4 1023); do
+		if [[ ! -f /dev/fd/${fd} ]]; then
+			printf "%s" "${fd}"
+			return 0
+		fi
+	done
+
+	return 1
 }
 
 ##
@@ -116,24 +117,32 @@ acquire_fd() {
 acquire_lock() {
 	local lock_mode=$1
 	local handle=$2
-	local fd
-	local ret
+	local fd message
 
 	# acquire fd from handle
-	fd=$(acquire_fd "${handle}")
+	if ! fd=$(acquire_fd "${handle}"); then
+		error "Failed to acquire free fd for locking"
+		return 1
+	fi
+
+	# assign busy message
+	message=("${@:3}")
+	if (( ! ${#message[@]} )); then
+		message=("Locking %s" "${handle}")
+	fi
 
 	# Only reopen the FD if it wasn't handed to us
 	if ! [[ "/dev/fd/${fd}" -ef "${handle}" ]]; then
 		mkdir -p -- "$(dirname -- "${handle}")"
-		eval "exec ${fd}>"'"${handle}"'
+		eval "exec ${fd}>>"'"${handle}"'
 	fi
 
+	# Acquire lock via flock on the fd
 	if ! flock "${lock_mode}" --nonblock "${fd}"; then
-		stat_busy "${@:3}"
+		stat_busy "${message[@]}"
 		if ! flock "${lock_mode}" "${fd}"; then
-			ret=$?
-			error "failed to lock %s: %s" "${handle}" "${ret}"
-			return ${ret}
+			error "Failed to acquire lock on %s" "${handle}"
+			return 1
 		fi
 		stat_done
 	fi
