@@ -58,7 +58,7 @@ RUN pacman-key --init && \
 USER tester
 
 RUN sq key generate --userid "Bob Tester <tester@localhost>" --output /build/private.key && \
-	sq export --keyring /build/private.key | sudo pacman-key -a - && \
+	sq cert export --keyring /build/private.key | sudo pacman-key -a - && \
 	sudo pacman-key --lsign-key tester@localhost && \
 	gpg --import /build/private.key && \
 	gpgconf --kill gpg-agent && \
